@@ -19,7 +19,7 @@ export default function PrivacyPage() {
               Privacy Policy
             </h1>
             <p className="text-sm text-foreground-muted mb-8">
-              Last Updated: February 11, 2025
+              Last Updated: February 18, 2026
             </p>
             <p className="text-foreground-muted leading-relaxed mb-6">
               BumpSetCut (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) is
@@ -120,7 +120,11 @@ export default function PrivacyPage() {
             <ul className="list-disc pl-6 space-y-2 text-foreground-muted mb-6">
               <li>
                 Process videos to detect and extract volleyball rallies using
-                machine learning
+                on-device machine learning (CoreML).{" "}
+                <strong>
+                  Video processing happens entirely on your device — your videos
+                  are never uploaded to our servers for AI analysis.
+                </strong>
               </li>
               <li>Store and organize your video library</li>
               <li>

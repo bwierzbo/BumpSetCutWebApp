@@ -19,7 +19,7 @@ export default function TermsPage() {
               Terms of Service
             </h1>
             <p className="text-sm text-foreground-muted mb-8">
-              Last Updated: February 11, 2025
+              Last Updated: February 18, 2026
             </p>
             <p className="text-foreground-muted leading-relaxed mb-8">
               Please read these Terms of Service (&quot;Terms&quot;) carefully
@@ -645,8 +645,8 @@ export default function TermsPage() {
               14.1 Governing Law
             </h3>
             <p className="text-foreground-muted leading-relaxed mb-6">
-              These Terms are governed by applicable law, without regard to
-              conflict of law provisions.
+              These Terms are governed by the laws of the State of Colorado,
+              United States, without regard to conflict of law provisions.
             </p>
 
             <h3 className="text-xl font-semibold text-secondary mt-6 mb-3">

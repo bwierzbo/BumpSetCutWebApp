@@ -1,6 +1,6 @@
 # Privacy Policy for BumpSetCut
 
-**Last Updated:** February 11, 2025
+**Last Updated:** February 18, 2026
 
 BumpSetCut ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application (the "App").
 
@@ -36,7 +36,7 @@ When you use the App, we automatically collect certain information:
 We use the collected information for the following purposes:
 
 ### 2.1 Core Functionality
-- Process videos to detect and extract volleyball rallies using machine learning
+- Process videos to detect and extract volleyball rallies using on-device machine learning (CoreML). **Video processing happens entirely on your device — your videos are never uploaded to our servers for AI analysis.**
 - Store and organize your video library
 - Enable social features (sharing highlights, comments, likes, follows)
 - Provide personalized feeds based on your follows and preferences

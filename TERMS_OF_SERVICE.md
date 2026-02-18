@@ -1,6 +1,6 @@
 # Terms of Service for BumpSetCut
 
-**Last Updated:** February 11, 2025
+**Last Updated:** February 18, 2026
 
 Please read these Terms of Service ("Terms") carefully before using the BumpSetCut mobile application (the "App"). These Terms govern your access to and use of the App.
 
@@ -284,7 +284,7 @@ You agree to indemnify and hold harmless BumpSetCut, its affiliates, and their r
 
 ### 14.1 Governing Law
 
-These Terms are governed by the laws of [Your State/Country], without regard to conflict of law provisions.
+These Terms are governed by the laws of the State of Colorado, United States, without regard to conflict of law provisions.
 
 ### 14.2 Arbitration Agreement
 
