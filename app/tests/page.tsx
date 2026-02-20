@@ -145,18 +145,28 @@ export default function TestDashboard() {
 
   const updateField = useCallback(
     async (itemId: string, field: string, value: string | null) => {
+      const autoFields: Record<string, unknown> = {};
+      if (field === "status") {
+        if (value && value !== "pending") {
+          autoFields.updated_by = "Benjamin Wierzbanowski";
+          autoFields.device = "Ben's iPhone 16 Pro Max";
+          autoFields.date_tested = new Date().toISOString();
+        } else {
+          autoFields.updated_by = null;
+          autoFields.device = null;
+          autoFields.date_tested = null;
+        }
+      }
       setItems((prev) =>
         prev.map((item) =>
-          item.id === itemId ? { ...item, [field]: value } : item
+          item.id === itemId ? { ...item, [field]: value, ...autoFields } : item
         )
       );
       const updateData: Record<string, unknown> = {
         [field]: value,
+        ...autoFields,
         updated_at: new Date().toISOString(),
       };
-      if (field === "status") {
-        updateData.date_tested = value === "pending" ? null : new Date().toISOString();
-      }
       const { error } = await supabase
         .from("test_items")
         .update(updateData)
