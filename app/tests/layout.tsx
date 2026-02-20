@@ -11,12 +11,7 @@ export default function TestsLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div
-      style={{
-        background: "#0d1117",
-        minHeight: "100vh",
-      }}
-    >
+    <div style={{ minHeight: "100vh" }}>
       {children}
     </div>
   );

@@ -48,12 +48,15 @@ const STATUS_COLORS: Record<Status, { bg: string; text: string; label: string }>
   blocked: { bg: "#bc8cff", text: "#fff", label: "Blocked" },
 };
 
-const PRIORITY_COLORS: Record<string, string> = {
-  critical: "#f85149",
-  high: "#d29922",
-  medium: "#8b949e",
-  low: "#6e7681",
+const PRIORITY_COLORS: Record<string, { dark: string; light: string }> = {
+  critical: { dark: "#f85149", light: "#d1242f" },
+  high: { dark: "#d29922", light: "#9a6700" },
+  medium: { dark: "#8b949e", light: "#656d76" },
+  low: { dark: "#6e7681", light: "#8b949e" },
 };
+
+const TESTERS = ["", "Benjamin Wierzbanowski"];
+const DEVICES = ["", "Ben's iPhone 16 Pro Max"];
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -62,6 +65,7 @@ export default function TestDashboard() {
   const [subsections, setSubsections] = useState<TestSubsection[]>([]);
   const [items, setItems] = useState<TestItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -78,6 +82,20 @@ export default function TestDashboard() {
 
   const [toast, setToast] = useState<{ msg: string; error: boolean } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Persist theme ──────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const saved = localStorage.getItem("td-dark-mode");
+    if (saved !== null) setDarkMode(saved === "true");
+  }, []);
+
+  const toggleTheme = () => {
+    setDarkMode((prev) => {
+      localStorage.setItem("td-dark-mode", String(!prev));
+      return !prev;
+    });
+  };
 
   // ── Data fetching ──────────────────────────────────────────────────────────
 
@@ -152,34 +170,7 @@ export default function TestDashboard() {
     [showToast]
   );
 
-  // ── Bulk update ────────────────────────────────────────────────────────────
-
-  const bulkSetVisible = useCallback(
-    async (status: Status) => {
-      const visible = items.filter((t) => matchesFilter(t));
-      if (visible.length === 0) return;
-      const ids = visible.map((t) => t.id);
-      setItems((prev) =>
-        prev.map((item) =>
-          ids.includes(item.id) ? { ...item, status } : item
-        )
-      );
-      const { error } = await supabase
-        .from("test_items")
-        .update({
-          status,
-          updated_at: new Date().toISOString(),
-          date_tested: status === "pending" ? null : new Date().toISOString(),
-        })
-        .in("id", ids);
-      if (error) showToast("Bulk save failed", true);
-      else showToast(`${visible.length} tests → ${status}`);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items, search, statusFilter, priorityFilter, typeFilter, showToast]
-  );
-
-  // ── Inline edit ────────────────────────────────────────────────────────────
+  // ── Inline edit (for notes) ────────────────────────────────────────────────
 
   const startEdit = (id: string, field: string, currentValue: string) => {
     setEditingCell({ id, field });
@@ -288,7 +279,7 @@ export default function TestDashboard() {
 
   if (loading) {
     return (
-      <div className="td">
+      <div className={`td${darkMode ? " dark" : " light"}`}>
         <div className="td-loading">Loading test plan...</div>
       </div>
     );
@@ -297,14 +288,19 @@ export default function TestDashboard() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="td">
+    <div className={`td${darkMode ? " dark" : " light"}`}>
       {/* Header */}
       <div className="td-header">
-        <h1>BUMPSETCUT &mdash; Beta Test Plan</h1>
-        <p className="td-subtitle">
-          {stats.total} Test Cases &bull; {sections.length} Sections &bull;
-          Real-time sync via Supabase
-        </p>
+        <div className="td-header-left">
+          <h1>BUMPSETCUT &mdash; Beta Test Plan</h1>
+          <p className="td-subtitle">
+            {stats.total} Test Cases &bull; {sections.length} Sections &bull;
+            Real-time sync via Supabase
+          </p>
+        </div>
+        <button className="td-theme-toggle" onClick={toggleTheme}>
+          {darkMode ? "Light Mode" : "Dark Mode"}
+        </button>
       </div>
 
       {/* Dashboard summary row */}
@@ -385,9 +381,6 @@ export default function TestDashboard() {
           </div>
         </div>
         <div className="td-toolbar-right">
-          <button className="td-btn td-btn-pass" onClick={() => bulkSetVisible("passed")}>Mark Visible Passed</button>
-          <button className="td-btn td-btn-fail" onClick={() => bulkSetVisible("failed")}>Mark Visible Failed</button>
-          <button className="td-btn" onClick={() => bulkSetVisible("pending")}>Reset Visible</button>
           <button className="td-btn" onClick={expandAll}>Expand All</button>
           <button className="td-btn" onClick={collapseAll}>Collapse All</button>
         </div>
@@ -431,6 +424,7 @@ export default function TestDashboard() {
                   toggleSection={toggleSection}
                   matchesFilter={matchesFilter}
                   updateField={updateField}
+                  darkMode={darkMode}
                   editingCell={editingCell}
                   editValue={editValue}
                   setEditValue={setEditValue}
@@ -453,8 +447,8 @@ export default function TestDashboard() {
       )}
 
       <style jsx global>{`
-        /* ── Base ─────────────────────────────────────────────────────── */
-        .td {
+        /* ── Theme variables ──────────────────────────────────────────── */
+        .td.dark {
           --bg: #0d1117;
           --surface: #161b22;
           --surface2: #1c2129;
@@ -468,7 +462,38 @@ export default function TestDashboard() {
           --blue: #58a6ff;
           --gray: #6e7681;
           --purple: #bc8cff;
+          --thead-bg: #1a1f2b;
+          --hover-bg: rgba(255, 255, 255, 0.02);
+          --even-bg: rgba(255, 255, 255, 0.01);
+          --even-hover-bg: rgba(255, 255, 255, 0.03);
+          --select-option-bg: #1c2129;
+          --select-option-color: #e6edf3;
+        }
 
+        .td.light {
+          --bg: #ffffff;
+          --surface: #f6f8fa;
+          --surface2: #eef1f5;
+          --border: #d0d7de;
+          --text: #1f2328;
+          --text2: #656d76;
+          --accent: #e55a2b;
+          --green: #1a7f37;
+          --red: #cf222e;
+          --yellow: #9a6700;
+          --blue: #0969da;
+          --gray: #6e7781;
+          --purple: #8250df;
+          --thead-bg: #f0f3f6;
+          --hover-bg: rgba(0, 0, 0, 0.02);
+          --even-bg: rgba(0, 0, 0, 0.015);
+          --even-hover-bg: rgba(0, 0, 0, 0.04);
+          --select-option-bg: #ffffff;
+          --select-option-color: #1f2328;
+        }
+
+        /* ── Base ─────────────────────────────────────────────────────── */
+        .td {
           font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
             system-ui, sans-serif;
           background: var(--bg);
@@ -476,6 +501,7 @@ export default function TestDashboard() {
           padding: 20px 24px;
           min-height: 100vh;
           font-size: 13px;
+          transition: background 0.2s, color 0.2s;
         }
 
         .td-loading {
@@ -489,8 +515,12 @@ export default function TestDashboard() {
 
         /* ── Header ──────────────────────────────────────────────────── */
         .td-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
           margin-bottom: 16px;
         }
+        .td-header-left {}
         .td-header h1 {
           font-size: 22px;
           font-weight: 700;
@@ -502,6 +532,22 @@ export default function TestDashboard() {
           font-size: 12px;
           color: var(--text2);
           margin: 0;
+        }
+        .td-theme-toggle {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          padding: 6px 14px;
+          color: var(--text2);
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.15s;
+          white-space: nowrap;
+        }
+        .td-theme-toggle:hover {
+          border-color: var(--accent);
+          color: var(--accent);
         }
 
         /* ── Summary bar ─────────────────────────────────────────────── */
@@ -620,10 +666,6 @@ export default function TestDashboard() {
           transition: all 0.1s;
         }
         .td-btn:hover { border-color: var(--accent); color: var(--text); }
-        .td-btn-pass { color: var(--green); }
-        .td-btn-pass:hover { border-color: var(--green); }
-        .td-btn-fail { color: var(--red); }
-        .td-btn-fail:hover { border-color: var(--red); }
 
         .td-match-count {
           font-size: 11px;
@@ -643,18 +685,17 @@ export default function TestDashboard() {
           table-layout: fixed;
         }
 
-        /* Column widths */
         .th-id { width: 70px; }
         .th-pri { width: 70px; }
         .th-desc { width: auto; }
         .th-status { width: 90px; }
-        .th-tester { width: 100px; }
-        .th-device { width: 100px; }
+        .th-tester { width: 140px; }
+        .th-device { width: 150px; }
         .th-date { width: 90px; }
         .th-notes { width: 160px; }
 
         .td-table thead th {
-          background: #1a1f2b;
+          background: var(--thead-bg);
           border-bottom: 2px solid var(--accent);
           padding: 8px 10px;
           text-align: left;
@@ -759,23 +800,21 @@ export default function TestDashboard() {
           vertical-align: middle;
         }
         .td-test-row:hover td {
-          background: rgba(255, 255, 255, 0.02);
+          background: var(--hover-bg);
         }
         .td-test-row:nth-child(even) td {
-          background: rgba(255, 255, 255, 0.01);
+          background: var(--even-bg);
         }
         .td-test-row:nth-child(even):hover td {
-          background: rgba(255, 255, 255, 0.03);
+          background: var(--even-hover-bg);
         }
 
-        /* Cell: ID */
         .td-cell-id {
           font-family: "SF Mono", "Fira Code", monospace;
           font-size: 11px;
           color: var(--text2);
         }
 
-        /* Cell: Priority */
         .td-cell-pri {
           font-size: 10px;
           font-weight: 700;
@@ -783,7 +822,6 @@ export default function TestDashboard() {
           letter-spacing: 0.3px;
         }
 
-        /* Cell: Description */
         .td-cell-desc {
           color: var(--text);
           line-height: 1.4;
@@ -803,7 +841,6 @@ export default function TestDashboard() {
           border-radius: 3px;
         }
 
-        /* Row status coloring */
         .td-test-row.row-passed .td-cell-desc { color: var(--green); }
         .td-test-row.row-failed .td-cell-desc {
           color: var(--red);
@@ -835,11 +872,43 @@ export default function TestDashboard() {
           min-width: 75px;
         }
         .td-status-select option {
-          background: #1c2129;
-          color: #e6edf3;
+          background: var(--select-option-bg);
+          color: var(--select-option-color);
         }
 
-        /* Cell: Editable text */
+        /* Cell: Enum dropdown (tester, device) */
+        .td-enum-select {
+          appearance: none;
+          -webkit-appearance: none;
+          background: transparent;
+          border: 1px solid transparent;
+          border-radius: 4px;
+          padding: 2px 18px 2px 4px;
+          font-size: 11px;
+          color: var(--text2);
+          cursor: pointer;
+          outline: none;
+          width: 100%;
+          transition: border-color 0.1s;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%238b949e'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 4px center;
+        }
+        .td-enum-select:hover {
+          border-color: var(--border);
+        }
+        .td-enum-select:focus {
+          border-color: var(--accent);
+        }
+        .td-enum-select option {
+          background: var(--select-option-bg);
+          color: var(--select-option-color);
+        }
+        .td-enum-select.has-value {
+          color: var(--text);
+        }
+
+        /* Cell: Editable text (notes) */
         .td-editable {
           cursor: pointer;
           padding: 2px 4px;
@@ -849,7 +918,7 @@ export default function TestDashboard() {
           transition: background 0.1s;
         }
         .td-editable:hover {
-          background: rgba(249, 115, 22, 0.1);
+          background: rgba(249, 115, 22, 0.08);
         }
         .td-editable-empty {
           color: var(--gray);
@@ -867,7 +936,6 @@ export default function TestDashboard() {
           outline: none;
         }
 
-        /* Cell: Date */
         .td-cell-date {
           font-size: 11px;
           color: var(--text2);
@@ -898,42 +966,25 @@ export default function TestDashboard() {
           to { opacity: 1; transform: translateY(0); }
         }
 
-        /* ── Responsive ──────────────────────────────────────────────── */
         @media (max-width: 900px) {
           .td { padding: 12px; }
           .td-toolbar { flex-direction: column; }
-          .th-device, .th-date, .th-tester {
-            display: none;
-          }
+          .th-device, .th-date, .th-tester { display: none; }
           .td-table td:nth-child(5),
           .td-table td:nth-child(6),
-          .td-table td:nth-child(7) {
-            display: none;
-          }
+          .td-table td:nth-child(7) { display: none; }
         }
       `}</style>
     </div>
   );
 }
 
-// ── Section block (table rows for a section) ─────────────────────────────────
+// ── Section block ────────────────────────────────────────────────────────────
 
 function SectionBlock({
-  section,
-  subs,
-  itemsBySubsection,
-  stats,
-  isCollapsed,
-  toggleSection,
-  matchesFilter,
-  updateField,
-  editingCell,
-  editValue,
-  setEditValue,
-  startEdit,
-  commitEdit,
-  cancelEdit,
-  editInputRef,
+  section, subs, itemsBySubsection, stats, isCollapsed,
+  toggleSection, matchesFilter, updateField, darkMode,
+  editingCell, editValue, setEditValue, startEdit, commitEdit, cancelEdit, editInputRef,
 }: {
   section: TestSection;
   subs: TestSubsection[];
@@ -943,6 +994,7 @@ function SectionBlock({
   toggleSection: (id: string) => void;
   matchesFilter: (t: TestItem) => boolean;
   updateField: (id: string, field: string, value: string | null) => void;
+  darkMode: boolean;
   editingCell: { id: string; field: string } | null;
   editValue: string;
   setEditValue: (v: string) => void;
@@ -953,65 +1005,37 @@ function SectionBlock({
 }) {
   return (
     <>
-      {/* Section header */}
       <tr className="td-section-row" onClick={() => toggleSection(section.id)}>
         <td colSpan={8}>
           <div className="td-section-name">
             <span className={`td-section-chevron${isCollapsed ? "" : " open"}`}>
               &#9654;
             </span>
-            <span>
-              {section.id}. {section.name}
-            </span>
-            <span className="td-section-count">
-              {stats.visible.length}/{stats.total}
-            </span>
+            <span>{section.id}. {section.name}</span>
+            <span className="td-section-count">{stats.visible.length}/{stats.total}</span>
             <div className="td-section-badges">
-              {stats.passed > 0 && (
-                <span className="td-mini-badge td-mini-badge-pass">
-                  {stats.passed} pass
-                </span>
-              )}
-              {stats.failed > 0 && (
-                <span className="td-mini-badge td-mini-badge-fail">
-                  {stats.failed} fail
-                </span>
-              )}
+              {stats.passed > 0 && <span className="td-mini-badge td-mini-badge-pass">{stats.passed} pass</span>}
+              {stats.failed > 0 && <span className="td-mini-badge td-mini-badge-fail">{stats.failed} fail</span>}
               <div className="td-mini-progress">
-                <div
-                  className="td-mini-progress-fill"
-                  style={{ width: `${stats.pct}%` }}
-                />
+                <div className="td-mini-progress-fill" style={{ width: `${stats.pct}%` }} />
               </div>
               <span className="td-section-pct">{stats.pct}%</span>
             </div>
           </div>
         </td>
       </tr>
-
-      {/* Subsection + test rows */}
-      {!isCollapsed &&
-        subs.map((sub) => {
-          const subItems = itemsBySubsection.get(sub.id) || [];
-          const visible = subItems.filter((t) => matchesFilter(t));
-          if (visible.length === 0) return null;
-
-          return (
-            <SubsectionBlock
-              key={sub.id}
-              sub={sub}
-              items={visible}
-              updateField={updateField}
-              editingCell={editingCell}
-              editValue={editValue}
-              setEditValue={setEditValue}
-              startEdit={startEdit}
-              commitEdit={commitEdit}
-              cancelEdit={cancelEdit}
-              editInputRef={editInputRef}
-            />
-          );
-        })}
+      {!isCollapsed && subs.map((sub) => {
+        const subItems = itemsBySubsection.get(sub.id) || [];
+        const visible = subItems.filter((t) => matchesFilter(t));
+        if (visible.length === 0) return null;
+        return (
+          <SubsectionBlock key={sub.id} sub={sub} items={visible}
+            updateField={updateField} darkMode={darkMode}
+            editingCell={editingCell} editValue={editValue} setEditValue={setEditValue}
+            startEdit={startEdit} commitEdit={commitEdit} cancelEdit={cancelEdit} editInputRef={editInputRef}
+          />
+        );
+      })}
     </>
   );
 }
@@ -1019,20 +1043,13 @@ function SectionBlock({
 // ── Subsection block ─────────────────────────────────────────────────────────
 
 function SubsectionBlock({
-  sub,
-  items,
-  updateField,
-  editingCell,
-  editValue,
-  setEditValue,
-  startEdit,
-  commitEdit,
-  cancelEdit,
-  editInputRef,
+  sub, items, updateField, darkMode,
+  editingCell, editValue, setEditValue, startEdit, commitEdit, cancelEdit, editInputRef,
 }: {
   sub: TestSubsection;
   items: TestItem[];
   updateField: (id: string, field: string, value: string | null) => void;
+  darkMode: boolean;
   editingCell: { id: string; field: string } | null;
   editValue: string;
   setEditValue: (v: string) => void;
@@ -1044,22 +1061,12 @@ function SubsectionBlock({
   return (
     <>
       <tr className="td-subsection-row">
-        <td colSpan={8}>
-          {sub.id} {sub.name}
-        </td>
+        <td colSpan={8}>{sub.id} {sub.name}</td>
       </tr>
       {items.map((t) => (
-        <TestRow
-          key={t.id}
-          item={t}
-          updateField={updateField}
-          editingCell={editingCell}
-          editValue={editValue}
-          setEditValue={setEditValue}
-          startEdit={startEdit}
-          commitEdit={commitEdit}
-          cancelEdit={cancelEdit}
-          editInputRef={editInputRef}
+        <TestRow key={t.id} item={t} updateField={updateField} darkMode={darkMode}
+          editingCell={editingCell} editValue={editValue} setEditValue={setEditValue}
+          startEdit={startEdit} commitEdit={commitEdit} cancelEdit={cancelEdit} editInputRef={editInputRef}
         />
       ))}
     </>
@@ -1069,18 +1076,12 @@ function SubsectionBlock({
 // ── Test row ─────────────────────────────────────────────────────────────────
 
 function TestRow({
-  item,
-  updateField,
-  editingCell,
-  editValue,
-  setEditValue,
-  startEdit,
-  commitEdit,
-  cancelEdit,
-  editInputRef,
+  item, updateField, darkMode,
+  editingCell, editValue, setEditValue, startEdit, commitEdit, cancelEdit, editInputRef,
 }: {
   item: TestItem;
   updateField: (id: string, field: string, value: string | null) => void;
+  darkMode: boolean;
   editingCell: { id: string; field: string } | null;
   editValue: string;
   setEditValue: (v: string) => void;
@@ -1093,7 +1094,8 @@ function TestRow({
     editingCell?.id === item.id && editingCell?.field === field;
 
   const statusInfo = STATUS_COLORS[item.status];
-  const priColor = PRIORITY_COLORS[item.priority] || "#8b949e";
+  const priColors = PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.medium;
+  const priColor = darkMode ? priColors.dark : priColors.light;
 
   const formatDate = (d: string | null) => {
     if (!d) return "";
@@ -1103,17 +1105,14 @@ function TestRow({
 
   return (
     <tr className={`td-test-row row-${item.status}`}>
-      {/* ID */}
       <td className="td-cell-id">{item.id}</td>
 
-      {/* Priority */}
       <td>
         <span className="td-cell-pri" style={{ color: priColor }}>
           {item.priority.toUpperCase()}
         </span>
       </td>
 
-      {/* Description */}
       <td className="td-cell-desc">
         {item.description}
         {item.automated && (
@@ -1123,7 +1122,6 @@ function TestRow({
         )}
       </td>
 
-      {/* Status — dropdown */}
       <td>
         <select
           className="td-status-select"
@@ -1132,65 +1130,37 @@ function TestRow({
           onChange={(e) => updateField(item.id, "status", e.target.value)}
         >
           {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {STATUS_COLORS[s].label}
-            </option>
+            <option key={s} value={s}>{STATUS_COLORS[s].label}</option>
           ))}
         </select>
       </td>
 
-      {/* Tested By — editable */}
       <td>
-        {isEditing("updated_by") ? (
-          <input
-            ref={editInputRef}
-            className="td-edit-input"
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={commitEdit}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitEdit();
-              if (e.key === "Escape") cancelEdit();
-            }}
-          />
-        ) : (
-          <div
-            className="td-editable"
-            onClick={() => startEdit(item.id, "updated_by", item.updated_by || "")}
-          >
-            {item.updated_by || <span className="td-editable-empty">click to edit</span>}
-          </div>
-        )}
+        <select
+          className={`td-enum-select${item.updated_by ? " has-value" : ""}`}
+          value={item.updated_by || ""}
+          onChange={(e) => updateField(item.id, "updated_by", e.target.value || null)}
+        >
+          {TESTERS.map((t) => (
+            <option key={t} value={t}>{t || "—"}</option>
+          ))}
+        </select>
       </td>
 
-      {/* Device — editable */}
       <td>
-        {isEditing("device") ? (
-          <input
-            ref={editInputRef}
-            className="td-edit-input"
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={commitEdit}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitEdit();
-              if (e.key === "Escape") cancelEdit();
-            }}
-          />
-        ) : (
-          <div
-            className="td-editable"
-            onClick={() => startEdit(item.id, "device", item.device || "")}
-          >
-            {item.device || <span className="td-editable-empty">click to edit</span>}
-          </div>
-        )}
+        <select
+          className={`td-enum-select${item.device ? " has-value" : ""}`}
+          value={item.device || ""}
+          onChange={(e) => updateField(item.id, "device", e.target.value || null)}
+        >
+          {DEVICES.map((d) => (
+            <option key={d} value={d}>{d || "—"}</option>
+          ))}
+        </select>
       </td>
 
-      {/* Date Tested */}
       <td className="td-cell-date">{formatDate(item.date_tested)}</td>
 
-      {/* Notes — editable */}
       <td>
         {isEditing("notes") ? (
           <input
