@@ -29,11 +29,31 @@ interface TestItem {
   notes: string | null;
   updated_by: string | null;
   updated_at: string;
+  device: string | null;
+  date_tested: string | null;
 }
 
-type StatusFilter = "all" | "pending" | "passed" | "failed" | "blocked";
+type Status = TestItem["status"];
+type StatusFilter = "all" | Status;
 type PriorityFilter = "all" | "critical" | "high";
 type TypeFilter = "all" | "auto" | "manual";
+
+const STATUSES: Status[] = ["pending", "passed", "failed", "skipped", "blocked"];
+
+const STATUS_COLORS: Record<Status, { bg: string; text: string; label: string }> = {
+  pending: { bg: "#d29922", text: "#fff", label: "Pending" },
+  passed: { bg: "#3fb950", text: "#fff", label: "Pass" },
+  failed: { bg: "#f85149", text: "#fff", label: "Fail" },
+  skipped: { bg: "#6e7681", text: "#fff", label: "Skip" },
+  blocked: { bg: "#bc8cff", text: "#fff", label: "Blocked" },
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  critical: "#f85149",
+  high: "#d29922",
+  medium: "#8b949e",
+  low: "#6e7681",
+};
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -47,16 +67,16 @@ export default function TestDashboard() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
-  const [pickerItemId, setPickerItemId] = useState<string | null>(null);
-  const [pickerPos, setPickerPos] = useState({ x: 0, y: 0 });
-  const pickerRef = useRef<HTMLDivElement>(null);
-
-  const [toast, setToast] = useState<{
-    msg: string;
-    error: boolean;
+  const [editingCell, setEditingCell] = useState<{
+    id: string;
+    field: string;
   } | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  const [toast, setToast] = useState<{ msg: string; error: boolean } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Data fetching ──────────────────────────────────────────────────────────
@@ -64,14 +84,8 @@ export default function TestDashboard() {
   useEffect(() => {
     async function load() {
       const [secRes, subRes, itemRes] = await Promise.all([
-        supabase
-          .from("test_sections")
-          .select("*")
-          .order("sort_order", { ascending: true }),
-        supabase
-          .from("test_subsections")
-          .select("*")
-          .order("sort_order", { ascending: true }),
+        supabase.from("test_sections").select("*").order("sort_order"),
+        supabase.from("test_subsections").select("*").order("sort_order"),
         supabase.from("test_items").select("*"),
       ]);
       if (secRes.data) setSections(secRes.data);
@@ -82,11 +96,11 @@ export default function TestDashboard() {
     load();
   }, []);
 
-  // ── Realtime subscription ──────────────────────────────────────────────────
+  // ── Realtime ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
     const channel = supabase
-      .channel("test_items_changes")
+      .channel("test_items_rt")
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "test_items" },
@@ -98,13 +112,10 @@ export default function TestDashboard() {
         }
       )
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // ── Toast helper ───────────────────────────────────────────────────────────
+  // ── Toast ──────────────────────────────────────────────────────────────────
 
   const showToast = useCallback((msg: string, error = false) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -112,58 +123,81 @@ export default function TestDashboard() {
     toastTimer.current = setTimeout(() => setToast(null), 2500);
   }, []);
 
-  // ── Status update ──────────────────────────────────────────────────────────
+  // ── Field update (generic) ─────────────────────────────────────────────────
 
-  const updateStatus = useCallback(
-    async (itemId: string, newStatus: TestItem["status"]) => {
+  const updateField = useCallback(
+    async (itemId: string, field: string, value: string | null) => {
       setItems((prev) =>
         prev.map((item) =>
-          item.id === itemId ? { ...item, status: newStatus } : item
+          item.id === itemId ? { ...item, [field]: value } : item
         )
       );
+      const updateData: Record<string, unknown> = {
+        [field]: value,
+        updated_at: new Date().toISOString(),
+      };
+      if (field === "status") {
+        updateData.date_tested = value === "pending" ? null : new Date().toISOString();
+      }
       const { error } = await supabase
         .from("test_items")
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .update(updateData)
         .eq("id", itemId);
       if (error) {
         showToast(`Failed to save ${itemId}`, true);
       } else {
-        showToast(`${itemId} → ${newStatus}`);
+        showToast(`${itemId}: ${field} updated`);
       }
     },
     [showToast]
   );
 
+  // ── Bulk update ────────────────────────────────────────────────────────────
+
   const bulkSetVisible = useCallback(
-    async (status: TestItem["status"]) => {
+    async (status: Status) => {
       const visible = items.filter((t) => matchesFilter(t));
       if (visible.length === 0) return;
-
+      const ids = visible.map((t) => t.id);
       setItems((prev) =>
         prev.map((item) =>
-          visible.some((v) => v.id === item.id)
-            ? { ...item, status }
-            : item
+          ids.includes(item.id) ? { ...item, status } : item
         )
       );
-
-      const ids = visible.map((t) => t.id);
       const { error } = await supabase
         .from("test_items")
-        .update({ status, updated_at: new Date().toISOString() })
+        .update({
+          status,
+          updated_at: new Date().toISOString(),
+          date_tested: status === "pending" ? null : new Date().toISOString(),
+        })
         .in("id", ids);
-
-      if (error) {
-        showToast("Bulk save failed", true);
-      } else {
-        showToast(`${visible.length} tests → ${status}`);
-      }
+      if (error) showToast("Bulk save failed", true);
+      else showToast(`${visible.length} tests → ${status}`);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [items, search, statusFilter, priorityFilter, typeFilter, showToast]
   );
 
-  // ── Filter logic ───────────────────────────────────────────────────────────
+  // ── Inline edit ────────────────────────────────────────────────────────────
+
+  const startEdit = (id: string, field: string, currentValue: string) => {
+    setEditingCell({ id, field });
+    setEditValue(currentValue);
+    setTimeout(() => editInputRef.current?.focus(), 0);
+  };
+
+  const commitEdit = () => {
+    if (editingCell) {
+      const val = editValue.trim() || null;
+      updateField(editingCell.id, editingCell.field, val);
+      setEditingCell(null);
+    }
+  };
+
+  const cancelEdit = () => setEditingCell(null);
+
+  // ── Filter ─────────────────────────────────────────────────────────────────
 
   function matchesFilter(t: TestItem): boolean {
     if (statusFilter !== "all" && t.status !== statusFilter) return false;
@@ -174,14 +208,15 @@ export default function TestDashboard() {
       const q = search.toLowerCase();
       if (
         !t.description.toLowerCase().includes(q) &&
-        !t.id.toLowerCase().includes(q)
+        !t.id.toLowerCase().includes(q) &&
+        !(t.notes || "").toLowerCase().includes(q)
       )
         return false;
     }
     return true;
   }
 
-  // ── Computed stats ─────────────────────────────────────────────────────────
+  // ── Stats ──────────────────────────────────────────────────────────────────
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -189,62 +224,26 @@ export default function TestDashboard() {
     const failed = items.filter((t) => t.status === "failed").length;
     const pending = items.filter((t) => t.status === "pending").length;
     const blocked = items.filter((t) => t.status === "blocked").length;
+    const skipped = items.filter((t) => t.status === "skipped").length;
     const automated = items.filter((t) => t.automated).length;
     const pct = total ? Math.round((passed / total) * 100) : 0;
-    const failPct = total ? Math.round((failed / total) * 100) : 0;
-    const skipPct = total
-      ? Math.round(
-          (items.filter((t) => t.status === "skipped").length / total) * 100
-        )
-      : 0;
-    return { total, passed, failed, pending, blocked, automated, pct, failPct, skipPct };
+    return { total, passed, failed, pending, blocked, skipped, automated, pct };
   }, [items]);
 
-  // ── Section toggle ─────────────────────────────────────────────────────────
+  // ── Section helpers ────────────────────────────────────────────────────────
 
   const toggleSection = (id: string) => {
-    setOpenSections((prev) => {
+    setCollapsedSections((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
   };
 
-  const expandAll = () =>
-    setOpenSections(new Set(sections.map((s) => s.id)));
-  const collapseAll = () => setOpenSections(new Set());
+  const expandAll = () => setCollapsedSections(new Set());
+  const collapseAll = () => setCollapsedSections(new Set(sections.map((s) => s.id)));
 
-  // ── Picker ─────────────────────────────────────────────────────────────────
-
-  const openPicker = (e: React.MouseEvent, itemId: string) => {
-    e.stopPropagation();
-    const rect = (e.target as HTMLElement).getBoundingClientRect();
-    setPickerPos({ x: rect.left - 10, y: rect.bottom + 6 });
-    setPickerItemId(itemId);
-  };
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (
-        pickerRef.current &&
-        !pickerRef.current.contains(e.target as Node) &&
-        !(e.target as HTMLElement).classList.contains("status-dot")
-      ) {
-        setPickerItemId(null);
-      }
-    };
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPickerItemId(null);
-    };
-    document.addEventListener("click", handleClick);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("click", handleClick);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, []);
-
-  // ── Group items by section/subsection ──────────────────────────────────────
+  // ── Grouped data ───────────────────────────────────────────────────────────
 
   const itemsBySubsection = useMemo(() => {
     const map = new Map<string, TestItem[]>();
@@ -266,31 +265,31 @@ export default function TestDashboard() {
     return map;
   }, [subsections]);
 
-  // ── Visible count ──────────────────────────────────────────────────────────
-
   const visibleCount = useMemo(
     () => items.filter((t) => matchesFilter(t)).length,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [items, search, statusFilter, priorityFilter, typeFilter]
   );
 
-  // ── Loading state ──────────────────────────────────────────────────────────
+  // ── Section stats ──────────────────────────────────────────────────────────
+
+  function sectionStats(sectionId: string) {
+    const subs = subsectionsBySection.get(sectionId) || [];
+    const all = subs.flatMap((sub) => itemsBySubsection.get(sub.id) || []);
+    const visible = all.filter((t) => matchesFilter(t));
+    const passed = all.filter((t) => t.status === "passed").length;
+    const failed = all.filter((t) => t.status === "failed").length;
+    const total = all.length;
+    const pct = total ? Math.round((passed / total) * 100) : 0;
+    return { all, visible, passed, failed, total, pct };
+  }
+
+  // ── Loading ────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <div className="test-dash">
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            height: "100vh",
-          }}
-        >
-          <div style={{ color: "var(--td-text2)", fontSize: 18 }}>
-            Loading test plan...
-          </div>
-        </div>
+      <div className="td">
+        <div className="td-loading">Loading test plan...</div>
       </div>
     );
   }
@@ -298,839 +297,618 @@ export default function TestDashboard() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="test-dash">
-      <h1>BumpSetCut Beta Test Plan</h1>
-      <p className="subtitle">
-        Click status dots to change test results. Changes sync in real-time via
-        Supabase.
-      </p>
-
-      {/* Stats bar */}
-      <div className="stats-bar">
-        <StatCard label="Total" value={stats.total} kind="total" />
-        <StatCard label="Passed" value={stats.passed} kind="passed" />
-        <StatCard label="Failed" value={stats.failed} kind="failed" />
-        <StatCard label="Pending" value={stats.pending} kind="pending" />
-        <StatCard label="Blocked" value={stats.blocked} kind="blocked" />
-        <StatCard label="Automated" value={stats.automated} kind="automated" />
+    <div className="td">
+      {/* Header */}
+      <div className="td-header">
+        <h1>BUMPSETCUT &mdash; Beta Test Plan</h1>
+        <p className="td-subtitle">
+          {stats.total} Test Cases &bull; {sections.length} Sections &bull;
+          Real-time sync via Supabase
+        </p>
       </div>
 
-      {/* Progress bar */}
-      <div className="progress-wrap">
-        <div className="progress-header">
-          <span className="label">Overall Progress</span>
-          <span className="pct">{stats.pct}%</span>
+      {/* Dashboard summary row */}
+      <div className="td-summary">
+        <div className="td-summary-stats">
+          <span className="td-stat">
+            <span className="td-stat-num">{stats.total}</span> Total
+          </span>
+          <span className="td-stat td-stat-pass">
+            <span className="td-stat-num">{stats.passed}</span> Pass
+          </span>
+          <span className="td-stat td-stat-fail">
+            <span className="td-stat-num">{stats.failed}</span> Fail
+          </span>
+          <span className="td-stat td-stat-pending">
+            <span className="td-stat-num">{stats.pending}</span> Pending
+          </span>
+          <span className="td-stat td-stat-blocked">
+            <span className="td-stat-num">{stats.blocked}</span> Blocked
+          </span>
+          <span className="td-stat td-stat-skip">
+            <span className="td-stat-num">{stats.skipped}</span> Skip
+          </span>
+          <span className="td-stat td-stat-auto">
+            <span className="td-stat-num">{stats.automated}</span> Auto
+          </span>
         </div>
-        <div className="progress-track">
-          <div
-            className="progress-fill-passed"
-            style={{ width: `${stats.pct}%` }}
-          />
-          <div
-            className="progress-fill-failed"
-            style={{ width: `${stats.failPct}%` }}
-          />
-          <div
-            className="progress-fill-skipped"
-            style={{ width: `${stats.skipPct}%` }}
-          />
+        <div className="td-progress-bar">
+          <div className="td-progress-fill td-fill-pass" style={{ width: `${stats.total ? (stats.passed / stats.total) * 100 : 0}%` }} />
+          <div className="td-progress-fill td-fill-fail" style={{ width: `${stats.total ? (stats.failed / stats.total) * 100 : 0}%` }} />
+          <div className="td-progress-fill td-fill-skip" style={{ width: `${stats.total ? (stats.skipped / stats.total) * 100 : 0}%` }} />
         </div>
+        <div className="td-progress-label">{stats.pct}% Complete</div>
       </div>
 
       {/* Toolbar */}
-      <div className="toolbar">
-        <button
-          className="toolbar-btn success"
-          onClick={() => bulkSetVisible("passed")}
-        >
-          Mark Visible Passed
-        </button>
-        <button
-          className="toolbar-btn danger"
-          onClick={() => bulkSetVisible("failed")}
-        >
-          Mark Visible Failed
-        </button>
-        <button
-          className="toolbar-btn"
-          onClick={() => bulkSetVisible("pending")}
-        >
-          Reset Visible
-        </button>
-        <button className="toolbar-btn" onClick={expandAll}>
-          Expand All
-        </button>
-        <button className="toolbar-btn" onClick={collapseAll}>
-          Collapse All
-        </button>
-      </div>
-
-      {/* Search */}
-      <div className="search-wrap">
-        <span className="search-icon">&#x1F50D;</span>
-        <input
-          className="search-input"
-          type="text"
-          placeholder="Search tests..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-
-      {/* Filters */}
-      <div className="filters">
-        <div className="filter-group">
-          <span className="filter-label">Status</span>
-          {(["all", "pending", "passed", "failed", "blocked"] as const).map(
-            (v) => (
+      <div className="td-toolbar">
+        <div className="td-toolbar-left">
+          <input
+            className="td-search"
+            type="text"
+            placeholder="Search tests..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div className="td-filter-group">
+            {(["all", "pending", "passed", "failed", "blocked"] as StatusFilter[]).map((v) => (
               <button
                 key={v}
-                className={`filter-btn${statusFilter === v ? " active" : ""}`}
+                className={`td-filter${statusFilter === v ? " active" : ""}`}
                 onClick={() => setStatusFilter(v)}
+              >
+                {v === "all" ? "All" : STATUS_COLORS[v as Status]?.label || v}
+              </button>
+            ))}
+          </div>
+          <div className="td-filter-group">
+            {(["all", "critical", "high"] as PriorityFilter[]).map((v) => (
+              <button
+                key={v}
+                className={`td-filter${priorityFilter === v ? " active" : ""}`}
+                onClick={() => setPriorityFilter(v)}
               >
                 {v.charAt(0).toUpperCase() + v.slice(1)}
               </button>
-            )
-          )}
+            ))}
+          </div>
+          <div className="td-filter-group">
+            {(["all", "auto", "manual"] as TypeFilter[]).map((v) => (
+              <button
+                key={v}
+                className={`td-filter${typeFilter === v ? " active" : ""}`}
+                onClick={() => setTypeFilter(v)}
+              >
+                {v === "auto" ? "Automated" : v.charAt(0).toUpperCase() + v.slice(1)}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="filter-sep" />
-        <div className="filter-group">
-          <span className="filter-label">Priority</span>
-          {(["all", "critical", "high"] as const).map((v) => (
-            <button
-              key={v}
-              className={`filter-btn${priorityFilter === v ? " active" : ""}`}
-              onClick={() => setPriorityFilter(v)}
-            >
-              {v.charAt(0).toUpperCase() + v.slice(1)}
-            </button>
-          ))}
-        </div>
-        <div className="filter-sep" />
-        <div className="filter-group">
-          <span className="filter-label">Type</span>
-          {(["all", "auto", "manual"] as const).map((v) => (
-            <button
-              key={v}
-              className={`filter-btn${typeFilter === v ? " active" : ""}`}
-              onClick={() => setTypeFilter(v)}
-            >
-              {v === "auto"
-                ? "Automated"
-                : v.charAt(0).toUpperCase() + v.slice(1)}
-            </button>
-          ))}
+        <div className="td-toolbar-right">
+          <button className="td-btn td-btn-pass" onClick={() => bulkSetVisible("passed")}>Mark Visible Passed</button>
+          <button className="td-btn td-btn-fail" onClick={() => bulkSetVisible("failed")}>Mark Visible Failed</button>
+          <button className="td-btn" onClick={() => bulkSetVisible("pending")}>Reset Visible</button>
+          <button className="td-btn" onClick={expandAll}>Expand All</button>
+          <button className="td-btn" onClick={collapseAll}>Collapse All</button>
         </div>
       </div>
 
-      {/* Match count */}
       {visibleCount !== items.length && (
-        <div className="match-count">
+        <div className="td-match-count">
           Showing {visibleCount} of {items.length} tests
         </div>
       )}
 
-      {/* Sections */}
-      <div>
-        {sections.map((section) => {
-          const subs = subsectionsBySection.get(section.id) || [];
-          const sectionItems = subs.flatMap(
-            (sub) => itemsBySubsection.get(sub.id) || []
-          );
-          const sectionVisible = sectionItems.filter((t) =>
-            matchesFilter(t)
-          ).length;
-          const sPassed = sectionItems.filter(
-            (t) => t.status === "passed"
-          ).length;
-          const sFailed = sectionItems.filter(
-            (t) => t.status === "failed"
-          ).length;
-          const sTotal = sectionItems.length;
-          const sPct = sTotal ? Math.round((sPassed / sTotal) * 100) : 0;
-          const isOpen = openSections.has(section.id);
+      {/* Table */}
+      <div className="td-table-wrap">
+        <table className="td-table">
+          <thead>
+            <tr>
+              <th className="th-id">Test ID</th>
+              <th className="th-pri">Priority</th>
+              <th className="th-desc">Test Case</th>
+              <th className="th-status">Status</th>
+              <th className="th-tester">Tested By</th>
+              <th className="th-device">Device</th>
+              <th className="th-date">Date Tested</th>
+              <th className="th-notes">Notes / Bugs</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sections.map((section) => {
+              const ss = sectionStats(section.id);
+              if (ss.visible.length === 0) return null;
+              const isCollapsed = collapsedSections.has(section.id);
 
-          if (sectionVisible === 0) return null;
-
-          return (
-            <div
-              key={section.id}
-              className={`section${isOpen ? " open" : ""}`}
-            >
-              <div
-                className="section-header"
-                onClick={() => toggleSection(section.id)}
-              >
-                <div className="section-title">
-                  {section.id}. {section.name}{" "}
-                  <span className="num">
-                    {sectionVisible}/{sTotal}
-                  </span>
-                </div>
-                <div className="section-badge">
-                  {sPassed > 0 && (
-                    <span className="mini-badge passed">{sPassed}</span>
-                  )}
-                  {sFailed > 0 && (
-                    <span className="mini-badge failed">{sFailed}</span>
-                  )}
-                  <div className="section-progress">
-                    <div
-                      className="section-progress-fill"
-                      style={{ width: `${sPct}%` }}
-                    />
-                  </div>
-                  <span className="chevron">&#9654;</span>
-                </div>
-              </div>
-              <div className="section-body">
-                {subs.map((sub) => {
-                  const subItems = itemsBySubsection.get(sub.id) || [];
-                  const subVisible = subItems.filter((t) =>
-                    matchesFilter(t)
-                  ).length;
-                  if (subVisible === 0) return null;
-
-                  return (
-                    <div key={sub.id}>
-                      <div className="subsection-title">
-                        {sub.id} {sub.name}
-                      </div>
-                      {subItems.map((t) => {
-                        if (!matchesFilter(t)) return null;
-                        return (
-                          <div
-                            key={t.id}
-                            className={`test-row status-${t.status}`}
-                          >
-                            <div
-                              className={`status-dot ${t.status}`}
-                              onClick={(e) => openPicker(e, t.id)}
-                            />
-                            <span className="test-id">{t.id}</span>
-                            <span className="test-desc">{t.description}</span>
-                            {t.automated && (
-                              <span className="tag auto">AUTO</span>
-                            )}
-                            {t.automation_file && (
-                              <span className="automation-file">
-                                {t.automation_file}
-                              </span>
-                            )}
-                            <span className={`tag ${t.priority}`}>
-                              {t.priority.toUpperCase()}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+              return (
+                <SectionBlock
+                  key={section.id}
+                  section={section}
+                  subs={subsectionsBySection.get(section.id) || []}
+                  itemsBySubsection={itemsBySubsection}
+                  stats={ss}
+                  isCollapsed={isCollapsed}
+                  toggleSection={toggleSection}
+                  matchesFilter={matchesFilter}
+                  updateField={updateField}
+                  editingCell={editingCell}
+                  editValue={editValue}
+                  setEditValue={setEditValue}
+                  startEdit={startEdit}
+                  commitEdit={commitEdit}
+                  cancelEdit={cancelEdit}
+                  editInputRef={editInputRef}
+                />
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
-      {/* Status picker popup */}
-      {pickerItemId && (
-        <div
-          ref={pickerRef}
-          className="status-picker show"
-          style={{ left: pickerPos.x, top: pickerPos.y }}
-        >
-          {(
-            ["pending", "passed", "failed", "skipped", "blocked"] as const
-          ).map((s) => (
-            <div
-              key={s}
-              className={`sp-opt ${s}`}
-              title={s.charAt(0).toUpperCase() + s.slice(1)}
-              onClick={() => {
-                updateStatus(pickerItemId, s);
-                setPickerItemId(null);
-              }}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Toast notification */}
+      {/* Toast */}
       {toast && (
-        <div className={`toast show${toast.error ? " error" : ""}`}>
+        <div className={`td-toast${toast.error ? " td-toast-err" : ""}`}>
           {toast.msg}
         </div>
       )}
 
       <style jsx global>{`
-        .test-dash {
-          --td-bg: #0d1117;
-          --td-surface: #161b22;
-          --td-surface2: #1c2129;
-          --td-border: #30363d;
-          --td-text: #e6edf3;
-          --td-text2: #8b949e;
-          --td-accent: #f97316;
-          --td-accent-dim: rgba(249, 115, 22, 0.15);
-          --td-green: #3fb950;
-          --td-green-dim: rgba(63, 185, 80, 0.15);
-          --td-red: #f85149;
-          --td-red-dim: rgba(248, 81, 73, 0.15);
-          --td-yellow: #d29922;
-          --td-yellow-dim: rgba(210, 153, 34, 0.15);
-          --td-blue: #58a6ff;
-          --td-blue-dim: rgba(88, 166, 255, 0.15);
-          --td-gray: #6e7681;
-          --td-gray-dim: rgba(110, 118, 129, 0.15);
-          --td-purple: #bc8cff;
-          --td-purple-dim: rgba(188, 140, 255, 0.15);
+        /* ── Base ─────────────────────────────────────────────────────── */
+        .td {
+          --bg: #0d1117;
+          --surface: #161b22;
+          --surface2: #1c2129;
+          --border: #30363d;
+          --text: #e6edf3;
+          --text2: #8b949e;
+          --accent: #f97316;
+          --green: #3fb950;
+          --red: #f85149;
+          --yellow: #d29922;
+          --blue: #58a6ff;
+          --gray: #6e7681;
+          --purple: #bc8cff;
 
           font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
             system-ui, sans-serif;
-          background: var(--td-bg);
-          color: var(--td-text);
-          line-height: 1.5;
-          padding: 24px;
-          max-width: 1200px;
-          margin: 0 auto;
+          background: var(--bg);
+          color: var(--text);
+          padding: 20px 24px;
           min-height: 100vh;
-        }
-
-        .test-dash h1 {
-          font-size: 28px;
-          font-weight: 700;
-          margin-bottom: 4px;
-          color: var(--td-text);
-        }
-        .test-dash .subtitle {
-          color: var(--td-text2);
-          font-size: 14px;
-          margin-bottom: 24px;
-        }
-
-        /* Toast */
-        .test-dash .toast {
-          position: fixed;
-          bottom: 24px;
-          right: 24px;
-          background: var(--td-green-dim);
-          border: 1px solid var(--td-green);
-          color: var(--td-green);
-          padding: 10px 20px;
-          border-radius: 10px;
           font-size: 13px;
-          font-weight: 600;
-          z-index: 100;
-          transition: all 0.2s;
-        }
-        .test-dash .toast.error {
-          background: var(--td-red-dim);
-          border-color: var(--td-red);
-          color: var(--td-red);
         }
 
-        /* Stats */
-        .test-dash .stats-bar {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-          gap: 12px;
-          margin-bottom: 24px;
-        }
-        .test-dash .stat-card {
-          background: var(--td-surface);
-          border: 1px solid var(--td-border);
-          border-radius: 12px;
-          padding: 16px;
-          text-align: center;
-        }
-        .test-dash .stat-card .number {
-          font-size: 32px;
-          font-weight: 700;
-          line-height: 1.2;
-        }
-        .test-dash .stat-card .label {
-          font-size: 12px;
-          color: var(--td-text2);
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          margin-top: 2px;
-        }
-        .test-dash .stat-card.total .number {
-          color: var(--td-text);
-        }
-        .test-dash .stat-card.passed .number {
-          color: var(--td-green);
-        }
-        .test-dash .stat-card.failed .number {
-          color: var(--td-red);
-        }
-        .test-dash .stat-card.pending .number {
-          color: var(--td-yellow);
-        }
-        .test-dash .stat-card.automated .number {
-          color: var(--td-blue);
-        }
-        .test-dash .stat-card.blocked .number {
-          color: var(--td-purple);
-        }
-
-        /* Progress */
-        .test-dash .progress-wrap {
-          background: var(--td-surface);
-          border: 1px solid var(--td-border);
-          border-radius: 12px;
-          padding: 16px 20px;
-          margin-bottom: 24px;
-        }
-        .test-dash .progress-header {
+        .td-loading {
           display: flex;
-          justify-content: space-between;
+          justify-content: center;
           align-items: center;
-          margin-bottom: 10px;
+          height: 100vh;
+          color: var(--text2);
+          font-size: 16px;
         }
-        .test-dash .progress-header .label {
-          font-size: 14px;
-          font-weight: 600;
+
+        /* ── Header ──────────────────────────────────────────────────── */
+        .td-header {
+          margin-bottom: 16px;
         }
-        .test-dash .progress-header .pct {
+        .td-header h1 {
           font-size: 22px;
           font-weight: 700;
-          color: var(--td-accent);
-        }
-        .test-dash .progress-track {
-          height: 10px;
-          background: var(--td-surface2);
-          border-radius: 5px;
-          overflow: hidden;
-          display: flex;
-        }
-        .test-dash .progress-fill-passed {
-          background: var(--td-green);
-          transition: width 0.4s ease;
-        }
-        .test-dash .progress-fill-failed {
-          background: var(--td-red);
-          transition: width 0.4s ease;
-        }
-        .test-dash .progress-fill-skipped {
-          background: var(--td-gray);
-          transition: width 0.4s ease;
-        }
-
-        /* Toolbar */
-        .test-dash .toolbar {
-          display: flex;
-          gap: 8px;
-          align-items: center;
-          margin-bottom: 16px;
-          flex-wrap: wrap;
-        }
-        .test-dash .toolbar-btn {
-          background: var(--td-surface);
-          border: 1px solid var(--td-border);
-          border-radius: 8px;
-          padding: 8px 16px;
-          color: var(--td-text);
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.15s;
-        }
-        .test-dash .toolbar-btn:hover {
-          border-color: var(--td-accent);
-          color: var(--td-accent);
-        }
-        .test-dash .toolbar-btn.danger {
-          color: var(--td-red);
-        }
-        .test-dash .toolbar-btn.danger:hover {
-          border-color: var(--td-red);
-        }
-        .test-dash .toolbar-btn.success {
-          color: var(--td-green);
-        }
-        .test-dash .toolbar-btn.success:hover {
-          border-color: var(--td-green);
-        }
-
-        /* Search */
-        .test-dash .search-wrap {
-          position: relative;
-          margin-bottom: 16px;
-        }
-        .test-dash .search-input {
-          width: 100%;
-          background: var(--td-surface);
-          border: 1px solid var(--td-border);
-          border-radius: 8px;
-          padding: 10px 16px 10px 38px;
-          color: var(--td-text);
-          font-size: 14px;
-          outline: none;
-          transition: border-color 0.15s;
-        }
-        .test-dash .search-input:focus {
-          border-color: var(--td-accent);
-        }
-        .test-dash .search-input::placeholder {
-          color: var(--td-gray);
-        }
-        .test-dash .search-icon {
-          position: absolute;
-          left: 12px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: var(--td-gray);
-          font-size: 14px;
-        }
-
-        /* Filters */
-        .test-dash .filters {
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-          margin-bottom: 20px;
-        }
-        .test-dash .filter-btn {
-          background: var(--td-surface);
-          border: 1px solid var(--td-border);
-          border-radius: 8px;
-          padding: 6px 14px;
-          color: var(--td-text2);
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.15s;
-        }
-        .test-dash .filter-btn:hover {
-          border-color: var(--td-accent);
-          color: var(--td-text);
-        }
-        .test-dash .filter-btn.active {
-          background: var(--td-accent-dim);
-          border-color: var(--td-accent);
-          color: var(--td-accent);
-        }
-        .test-dash .filter-group {
-          display: flex;
-          gap: 6px;
-          align-items: center;
-        }
-        .test-dash .filter-label {
-          font-size: 11px;
-          color: var(--td-text2);
-          text-transform: uppercase;
           letter-spacing: 0.5px;
-          margin-right: 4px;
+          color: var(--text);
+          margin: 0 0 2px;
         }
-        .test-dash .filter-sep {
-          width: 1px;
-          height: 24px;
-          background: var(--td-border);
-          margin: 0 8px;
-        }
-        .test-dash .match-count {
+        .td-subtitle {
           font-size: 12px;
-          color: var(--td-text2);
-          margin-bottom: 12px;
+          color: var(--text2);
+          margin: 0;
         }
 
-        /* Sections */
-        .test-dash .section {
-          background: var(--td-surface);
-          border: 1px solid var(--td-border);
-          border-radius: 12px;
+        /* ── Summary bar ─────────────────────────────────────────────── */
+        .td-summary {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          padding: 12px 16px;
           margin-bottom: 12px;
-          overflow: hidden;
         }
-        .test-dash .section-header {
-          padding: 14px 20px;
-          cursor: pointer;
+        .td-summary-stats {
+          display: flex;
+          gap: 20px;
+          flex-wrap: wrap;
+          margin-bottom: 8px;
+        }
+        .td-stat {
+          font-size: 12px;
+          color: var(--text2);
+        }
+        .td-stat-num {
+          font-weight: 700;
+          font-size: 18px;
+          margin-right: 3px;
+        }
+        .td-stat-pass .td-stat-num { color: var(--green); }
+        .td-stat-fail .td-stat-num { color: var(--red); }
+        .td-stat-pending .td-stat-num { color: var(--yellow); }
+        .td-stat-blocked .td-stat-num { color: var(--purple); }
+        .td-stat-skip .td-stat-num { color: var(--gray); }
+        .td-stat-auto .td-stat-num { color: var(--blue); }
+
+        .td-progress-bar {
+          height: 6px;
+          background: var(--surface2);
+          border-radius: 3px;
+          overflow: hidden;
+          display: flex;
+        }
+        .td-progress-fill { transition: width 0.3s; }
+        .td-fill-pass { background: var(--green); }
+        .td-fill-fail { background: var(--red); }
+        .td-fill-skip { background: var(--gray); }
+        .td-progress-label {
+          font-size: 11px;
+          color: var(--accent);
+          font-weight: 600;
+          margin-top: 4px;
+          text-align: right;
+        }
+
+        /* ── Toolbar ─────────────────────────────────────────────────── */
+        .td-toolbar {
           display: flex;
           justify-content: space-between;
+          align-items: flex-start;
+          gap: 12px;
+          flex-wrap: wrap;
+          margin-bottom: 12px;
+        }
+        .td-toolbar-left {
+          display: flex;
+          gap: 8px;
           align-items: center;
+          flex-wrap: wrap;
+        }
+        .td-toolbar-right {
+          display: flex;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+        .td-search {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          padding: 6px 12px;
+          color: var(--text);
+          font-size: 12px;
+          outline: none;
+          width: 180px;
+        }
+        .td-search:focus { border-color: var(--accent); }
+        .td-search::placeholder { color: var(--gray); }
+
+        .td-filter-group {
+          display: flex;
+          gap: 2px;
+        }
+        .td-filter {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 4px;
+          padding: 4px 10px;
+          color: var(--text2);
+          font-size: 11px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.1s;
+        }
+        .td-filter:hover { border-color: var(--accent); color: var(--text); }
+        .td-filter.active {
+          background: rgba(249, 115, 22, 0.15);
+          border-color: var(--accent);
+          color: var(--accent);
+        }
+
+        .td-btn {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 4px;
+          padding: 4px 10px;
+          color: var(--text2);
+          font-size: 11px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.1s;
+        }
+        .td-btn:hover { border-color: var(--accent); color: var(--text); }
+        .td-btn-pass { color: var(--green); }
+        .td-btn-pass:hover { border-color: var(--green); }
+        .td-btn-fail { color: var(--red); }
+        .td-btn-fail:hover { border-color: var(--red); }
+
+        .td-match-count {
+          font-size: 11px;
+          color: var(--text2);
+          margin-bottom: 8px;
+        }
+
+        /* ── Table ───────────────────────────────────────────────────── */
+        .td-table-wrap {
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          overflow: auto;
+        }
+        .td-table {
+          width: 100%;
+          border-collapse: collapse;
+          table-layout: fixed;
+        }
+
+        /* Column widths */
+        .th-id { width: 70px; }
+        .th-pri { width: 70px; }
+        .th-desc { width: auto; }
+        .th-status { width: 90px; }
+        .th-tester { width: 100px; }
+        .th-device { width: 100px; }
+        .th-date { width: 90px; }
+        .th-notes { width: 160px; }
+
+        .td-table thead th {
+          background: #1a1f2b;
+          border-bottom: 2px solid var(--accent);
+          padding: 8px 10px;
+          text-align: left;
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: var(--text);
+          position: sticky;
+          top: 0;
+          z-index: 10;
+          white-space: nowrap;
+        }
+
+        /* ── Section header row ──────────────────────────────────────── */
+        .td-section-row td {
+          background: var(--surface);
+          padding: 10px;
+          font-weight: 700;
+          font-size: 13px;
+          cursor: pointer;
           user-select: none;
+          border-bottom: 1px solid var(--border);
         }
-        .test-dash .section-header:hover {
-          background: var(--td-surface2);
+        .td-section-row:hover td {
+          background: var(--surface2);
         }
-        .test-dash .section-title {
-          font-size: 16px;
-          font-weight: 600;
+        .td-section-name {
           display: flex;
           align-items: center;
           gap: 10px;
         }
-        .test-dash .section-title .num {
-          color: var(--td-text2);
-          font-size: 13px;
-          font-weight: 400;
+        .td-section-chevron {
+          font-size: 10px;
+          color: var(--text2);
+          transition: transform 0.15s;
+          display: inline-block;
         }
-        .test-dash .section-badge {
-          display: flex;
-          gap: 6px;
-          align-items: center;
-        }
-        .test-dash .mini-badge {
-          font-size: 11px;
-          font-weight: 600;
-          padding: 2px 8px;
-          border-radius: 10px;
-        }
-        .test-dash .mini-badge.passed {
-          background: var(--td-green-dim);
-          color: var(--td-green);
-        }
-        .test-dash .mini-badge.failed {
-          background: var(--td-red-dim);
-          color: var(--td-red);
-        }
-        .test-dash .chevron {
-          color: var(--td-text2);
-          transition: transform 0.2s;
-          font-size: 12px;
-        }
-        .test-dash .section.open .chevron {
+        .td-section-chevron.open {
           transform: rotate(90deg);
         }
-        .test-dash .section-body {
-          display: none;
-          border-top: 1px solid var(--td-border);
+        .td-section-count {
+          font-size: 11px;
+          color: var(--text2);
+          font-weight: 400;
         }
-        .test-dash .section.open .section-body {
-          display: block;
+        .td-section-badges {
+          display: flex;
+          gap: 6px;
+          margin-left: auto;
+          align-items: center;
         }
-        .test-dash .subsection-title {
-          font-size: 13px;
+        .td-mini-badge {
+          font-size: 10px;
           font-weight: 600;
-          color: var(--td-text2);
-          padding: 10px 20px 6px;
-          text-transform: uppercase;
-          letter-spacing: 0.3px;
+          padding: 1px 6px;
+          border-radius: 8px;
         }
-        .test-dash .section-progress {
-          width: 60px;
-          height: 4px;
-          background: var(--td-surface2);
+        .td-mini-badge-pass {
+          background: rgba(63, 185, 80, 0.15);
+          color: var(--green);
+        }
+        .td-mini-badge-fail {
+          background: rgba(248, 81, 73, 0.15);
+          color: var(--red);
+        }
+        .td-section-pct {
+          font-size: 11px;
+          color: var(--accent);
+          font-weight: 600;
+        }
+        .td-mini-progress {
+          width: 50px;
+          height: 3px;
+          background: var(--surface2);
           border-radius: 2px;
           overflow: hidden;
-          margin-left: 8px;
         }
-        .test-dash .section-progress-fill {
+        .td-mini-progress-fill {
           height: 100%;
-          background: var(--td-green);
+          background: var(--green);
           transition: width 0.3s;
         }
 
-        /* Test rows */
-        .test-dash .test-row {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 8px 20px;
-          border-bottom: 1px solid var(--td-border);
-          font-size: 14px;
+        /* ── Subsection header row ───────────────────────────────────── */
+        .td-subsection-row td {
+          background: var(--surface2);
+          padding: 6px 10px;
+          font-size: 11px;
+          font-weight: 600;
+          color: var(--text2);
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
+          border-bottom: 1px solid var(--border);
+        }
+
+        /* ── Test row ────────────────────────────────────────────────── */
+        .td-test-row td {
+          padding: 6px 10px;
+          border-bottom: 1px solid var(--border);
+          font-size: 12px;
+          vertical-align: middle;
+        }
+        .td-test-row:hover td {
+          background: rgba(255, 255, 255, 0.02);
+        }
+        .td-test-row:nth-child(even) td {
+          background: rgba(255, 255, 255, 0.01);
+        }
+        .td-test-row:nth-child(even):hover td {
+          background: rgba(255, 255, 255, 0.03);
+        }
+
+        /* Cell: ID */
+        .td-cell-id {
+          font-family: "SF Mono", "Fira Code", monospace;
+          font-size: 11px;
+          color: var(--text2);
+        }
+
+        /* Cell: Priority */
+        .td-cell-pri {
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
+        }
+
+        /* Cell: Description */
+        .td-cell-desc {
+          color: var(--text);
+          line-height: 1.4;
+        }
+        .td-cell-desc-tags {
+          display: inline-flex;
+          gap: 4px;
+          margin-left: 6px;
+          vertical-align: middle;
+        }
+        .td-tag-auto {
+          font-size: 9px;
+          font-weight: 700;
+          background: rgba(88, 166, 255, 0.15);
+          color: var(--blue);
+          padding: 1px 5px;
+          border-radius: 3px;
+        }
+
+        /* Row status coloring */
+        .td-test-row.row-passed .td-cell-desc { color: var(--green); }
+        .td-test-row.row-failed .td-cell-desc {
+          color: var(--red);
+          text-decoration: line-through;
+          text-decoration-color: rgba(248, 81, 73, 0.3);
+        }
+        .td-test-row.row-skipped .td-cell-desc {
+          color: var(--gray);
+          text-decoration: line-through;
+          text-decoration-color: rgba(110, 118, 129, 0.3);
+        }
+        .td-test-row.row-blocked .td-cell-desc { color: var(--purple); }
+
+        /* Cell: Status dropdown */
+        .td-status-select {
+          appearance: none;
+          -webkit-appearance: none;
+          border: none;
+          border-radius: 4px;
+          padding: 3px 20px 3px 8px;
+          font-size: 11px;
+          font-weight: 700;
+          cursor: pointer;
+          outline: none;
+          color: white;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='white'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 6px center;
+          min-width: 75px;
+        }
+        .td-status-select option {
+          background: #1c2129;
+          color: #e6edf3;
+        }
+
+        /* Cell: Editable text */
+        .td-editable {
+          cursor: pointer;
+          padding: 2px 4px;
+          border-radius: 3px;
+          min-height: 20px;
+          color: var(--text2);
           transition: background 0.1s;
         }
-        .test-dash .test-row:last-child {
-          border-bottom: none;
+        .td-editable:hover {
+          background: rgba(249, 115, 22, 0.1);
         }
-        .test-dash .test-row:hover {
-          background: var(--td-surface2);
+        .td-editable-empty {
+          color: var(--gray);
+          font-style: italic;
+          font-size: 11px;
         }
-        .test-dash .test-id {
-          font-family: "SF Mono", "Fira Code", monospace;
+        .td-edit-input {
+          background: var(--surface);
+          border: 1px solid var(--accent);
+          border-radius: 3px;
+          padding: 2px 4px;
+          color: var(--text);
           font-size: 12px;
-          color: var(--td-text2);
-          min-width: 56px;
-        }
-        .test-dash .test-desc {
-          flex: 1;
-          color: var(--td-text);
-        }
-        .test-dash .test-row.status-passed .test-desc {
-          color: var(--td-green);
-        }
-        .test-dash .test-row.status-failed .test-desc {
-          color: var(--td-red);
-          text-decoration: line-through;
-          text-decoration-color: rgba(248, 81, 73, 0.4);
-        }
-        .test-dash .test-row.status-skipped .test-desc {
-          color: var(--td-gray);
-          text-decoration: line-through;
-          text-decoration-color: rgba(110, 118, 129, 0.4);
-        }
-        .test-dash .test-row.status-blocked .test-desc {
-          color: var(--td-purple);
+          width: 100%;
+          outline: none;
         }
 
-        .test-dash .tag {
-          font-size: 10px;
-          font-weight: 600;
-          padding: 2px 6px;
-          border-radius: 4px;
-          white-space: nowrap;
-        }
-        .test-dash .tag.auto {
-          background: var(--td-blue-dim);
-          color: var(--td-blue);
-        }
-        .test-dash .tag.critical {
-          background: var(--td-red-dim);
-          color: var(--td-red);
-        }
-        .test-dash .tag.high {
-          background: var(--td-yellow-dim);
-          color: var(--td-yellow);
-        }
-        .test-dash .tag.medium {
-          background: var(--td-gray-dim);
-          color: var(--td-text2);
-        }
-        .test-dash .tag.low {
-          background: transparent;
-          color: var(--td-gray);
-          border: 1px solid var(--td-border);
-        }
-
-        .test-dash .automation-file {
+        /* Cell: Date */
+        .td-cell-date {
           font-size: 11px;
-          color: var(--td-text2);
-          margin-left: 4px;
+          color: var(--text2);
         }
 
-        /* Clickable status dot */
-        .test-dash .status-dot {
-          width: 18px;
-          height: 18px;
-          border-radius: 50%;
-          flex-shrink: 0;
-          cursor: pointer;
-          transition: all 0.15s;
-          border: 2px solid transparent;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 10px;
-          color: white;
-          font-weight: 700;
-        }
-        .test-dash .status-dot:hover {
-          transform: scale(1.3);
-        }
-        .test-dash .status-dot.pending {
-          background: var(--td-yellow);
-          opacity: 0.5;
-        }
-        .test-dash .status-dot.pending:hover {
-          opacity: 1;
-        }
-        .test-dash .status-dot.passed {
-          background: var(--td-green);
-        }
-        .test-dash .status-dot.passed::after {
-          content: "\u2713";
-        }
-        .test-dash .status-dot.failed {
-          background: var(--td-red);
-        }
-        .test-dash .status-dot.failed::after {
-          content: "\u2717";
-        }
-        .test-dash .status-dot.skipped {
-          background: var(--td-gray);
-        }
-        .test-dash .status-dot.skipped::after {
-          content: "\u2014";
-        }
-        .test-dash .status-dot.blocked {
-          background: var(--td-purple);
-        }
-        .test-dash .status-dot.blocked::after {
-          content: "B";
-          font-size: 9px;
-        }
-
-        /* Status picker */
-        .test-dash .status-picker {
+        /* ── Toast ───────────────────────────────────────────────────── */
+        .td-toast {
           position: fixed;
-          background: var(--td-surface);
-          border: 1px solid var(--td-border);
-          border-radius: 10px;
-          padding: 6px;
-          z-index: 50;
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-          display: flex;
-          gap: 6px;
+          bottom: 20px;
+          right: 20px;
+          background: rgba(63, 185, 80, 0.15);
+          border: 1px solid var(--green);
+          color: var(--green);
+          padding: 8px 16px;
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 600;
+          z-index: 100;
+          animation: td-toast-in 0.2s ease;
         }
-        .test-dash .status-picker.show {
-          display: flex;
+        .td-toast-err {
+          background: rgba(248, 81, 73, 0.15);
+          border-color: var(--red);
+          color: var(--red);
         }
-        .test-dash .sp-opt {
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 11px;
-          color: white;
-          font-weight: 700;
-          transition: transform 0.1s;
-          border: 2px solid transparent;
-        }
-        .test-dash .sp-opt:hover {
-          transform: scale(1.2);
-          border-color: var(--td-text);
-        }
-        .test-dash .sp-opt.pending {
-          background: var(--td-yellow);
-          opacity: 0.7;
-        }
-        .test-dash .sp-opt.passed {
-          background: var(--td-green);
-        }
-        .test-dash .sp-opt.passed::after {
-          content: "\u2713";
-        }
-        .test-dash .sp-opt.failed {
-          background: var(--td-red);
-        }
-        .test-dash .sp-opt.failed::after {
-          content: "\u2717";
-        }
-        .test-dash .sp-opt.skipped {
-          background: var(--td-gray);
-        }
-        .test-dash .sp-opt.skipped::after {
-          content: "\u2014";
-        }
-        .test-dash .sp-opt.blocked {
-          background: var(--td-purple);
-        }
-        .test-dash .sp-opt.blocked::after {
-          content: "B";
-          font-size: 9px;
+        @keyframes td-toast-in {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
         }
 
-        @media (max-width: 600px) {
-          .test-dash {
-            padding: 12px;
+        /* ── Responsive ──────────────────────────────────────────────── */
+        @media (max-width: 900px) {
+          .td { padding: 12px; }
+          .td-toolbar { flex-direction: column; }
+          .th-device, .th-date, .th-tester {
+            display: none;
           }
-          .test-dash .stats-bar {
-            grid-template-columns: repeat(3, 1fr);
-          }
-          .test-dash .stat-card .number {
-            font-size: 24px;
-          }
-          .test-dash .test-row {
-            padding: 8px 12px;
-            gap: 8px;
-          }
-          .test-dash .section-header {
-            padding: 12px;
+          .td-table td:nth-child(5),
+          .td-table td:nth-child(6),
+          .td-table td:nth-child(7) {
+            display: none;
           }
         }
       `}</style>
@@ -1138,21 +916,303 @@ export default function TestDashboard() {
   );
 }
 
-// ── Stat card component ──────────────────────────────────────────────────────
+// ── Section block (table rows for a section) ─────────────────────────────────
 
-function StatCard({
-  label,
-  value,
-  kind,
+function SectionBlock({
+  section,
+  subs,
+  itemsBySubsection,
+  stats,
+  isCollapsed,
+  toggleSection,
+  matchesFilter,
+  updateField,
+  editingCell,
+  editValue,
+  setEditValue,
+  startEdit,
+  commitEdit,
+  cancelEdit,
+  editInputRef,
 }: {
-  label: string;
-  value: number;
-  kind: string;
+  section: TestSection;
+  subs: TestSubsection[];
+  itemsBySubsection: Map<string, TestItem[]>;
+  stats: { visible: TestItem[]; passed: number; failed: number; total: number; pct: number };
+  isCollapsed: boolean;
+  toggleSection: (id: string) => void;
+  matchesFilter: (t: TestItem) => boolean;
+  updateField: (id: string, field: string, value: string | null) => void;
+  editingCell: { id: string; field: string } | null;
+  editValue: string;
+  setEditValue: (v: string) => void;
+  startEdit: (id: string, field: string, current: string) => void;
+  commitEdit: () => void;
+  cancelEdit: () => void;
+  editInputRef: React.RefObject<HTMLInputElement | null>;
 }) {
   return (
-    <div className={`stat-card ${kind}`}>
-      <div className="number">{value}</div>
-      <div className="label">{label}</div>
-    </div>
+    <>
+      {/* Section header */}
+      <tr className="td-section-row" onClick={() => toggleSection(section.id)}>
+        <td colSpan={8}>
+          <div className="td-section-name">
+            <span className={`td-section-chevron${isCollapsed ? "" : " open"}`}>
+              &#9654;
+            </span>
+            <span>
+              {section.id}. {section.name}
+            </span>
+            <span className="td-section-count">
+              {stats.visible.length}/{stats.total}
+            </span>
+            <div className="td-section-badges">
+              {stats.passed > 0 && (
+                <span className="td-mini-badge td-mini-badge-pass">
+                  {stats.passed} pass
+                </span>
+              )}
+              {stats.failed > 0 && (
+                <span className="td-mini-badge td-mini-badge-fail">
+                  {stats.failed} fail
+                </span>
+              )}
+              <div className="td-mini-progress">
+                <div
+                  className="td-mini-progress-fill"
+                  style={{ width: `${stats.pct}%` }}
+                />
+              </div>
+              <span className="td-section-pct">{stats.pct}%</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+
+      {/* Subsection + test rows */}
+      {!isCollapsed &&
+        subs.map((sub) => {
+          const subItems = itemsBySubsection.get(sub.id) || [];
+          const visible = subItems.filter((t) => matchesFilter(t));
+          if (visible.length === 0) return null;
+
+          return (
+            <SubsectionBlock
+              key={sub.id}
+              sub={sub}
+              items={visible}
+              updateField={updateField}
+              editingCell={editingCell}
+              editValue={editValue}
+              setEditValue={setEditValue}
+              startEdit={startEdit}
+              commitEdit={commitEdit}
+              cancelEdit={cancelEdit}
+              editInputRef={editInputRef}
+            />
+          );
+        })}
+    </>
+  );
+}
+
+// ── Subsection block ─────────────────────────────────────────────────────────
+
+function SubsectionBlock({
+  sub,
+  items,
+  updateField,
+  editingCell,
+  editValue,
+  setEditValue,
+  startEdit,
+  commitEdit,
+  cancelEdit,
+  editInputRef,
+}: {
+  sub: TestSubsection;
+  items: TestItem[];
+  updateField: (id: string, field: string, value: string | null) => void;
+  editingCell: { id: string; field: string } | null;
+  editValue: string;
+  setEditValue: (v: string) => void;
+  startEdit: (id: string, field: string, current: string) => void;
+  commitEdit: () => void;
+  cancelEdit: () => void;
+  editInputRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  return (
+    <>
+      <tr className="td-subsection-row">
+        <td colSpan={8}>
+          {sub.id} {sub.name}
+        </td>
+      </tr>
+      {items.map((t) => (
+        <TestRow
+          key={t.id}
+          item={t}
+          updateField={updateField}
+          editingCell={editingCell}
+          editValue={editValue}
+          setEditValue={setEditValue}
+          startEdit={startEdit}
+          commitEdit={commitEdit}
+          cancelEdit={cancelEdit}
+          editInputRef={editInputRef}
+        />
+      ))}
+    </>
+  );
+}
+
+// ── Test row ─────────────────────────────────────────────────────────────────
+
+function TestRow({
+  item,
+  updateField,
+  editingCell,
+  editValue,
+  setEditValue,
+  startEdit,
+  commitEdit,
+  cancelEdit,
+  editInputRef,
+}: {
+  item: TestItem;
+  updateField: (id: string, field: string, value: string | null) => void;
+  editingCell: { id: string; field: string } | null;
+  editValue: string;
+  setEditValue: (v: string) => void;
+  startEdit: (id: string, field: string, current: string) => void;
+  commitEdit: () => void;
+  cancelEdit: () => void;
+  editInputRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  const isEditing = (field: string) =>
+    editingCell?.id === item.id && editingCell?.field === field;
+
+  const statusInfo = STATUS_COLORS[item.status];
+  const priColor = PRIORITY_COLORS[item.priority] || "#8b949e";
+
+  const formatDate = (d: string | null) => {
+    if (!d) return "";
+    const date = new Date(d);
+    return `${date.getMonth() + 1}/${date.getDate()}`;
+  };
+
+  return (
+    <tr className={`td-test-row row-${item.status}`}>
+      {/* ID */}
+      <td className="td-cell-id">{item.id}</td>
+
+      {/* Priority */}
+      <td>
+        <span className="td-cell-pri" style={{ color: priColor }}>
+          {item.priority.toUpperCase()}
+        </span>
+      </td>
+
+      {/* Description */}
+      <td className="td-cell-desc">
+        {item.description}
+        {item.automated && (
+          <span className="td-cell-desc-tags">
+            <span className="td-tag-auto">AUTO</span>
+          </span>
+        )}
+      </td>
+
+      {/* Status — dropdown */}
+      <td>
+        <select
+          className="td-status-select"
+          value={item.status}
+          style={{ backgroundColor: statusInfo.bg }}
+          onChange={(e) => updateField(item.id, "status", e.target.value)}
+        >
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {STATUS_COLORS[s].label}
+            </option>
+          ))}
+        </select>
+      </td>
+
+      {/* Tested By — editable */}
+      <td>
+        {isEditing("updated_by") ? (
+          <input
+            ref={editInputRef}
+            className="td-edit-input"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitEdit();
+              if (e.key === "Escape") cancelEdit();
+            }}
+          />
+        ) : (
+          <div
+            className="td-editable"
+            onClick={() => startEdit(item.id, "updated_by", item.updated_by || "")}
+          >
+            {item.updated_by || <span className="td-editable-empty">click to edit</span>}
+          </div>
+        )}
+      </td>
+
+      {/* Device — editable */}
+      <td>
+        {isEditing("device") ? (
+          <input
+            ref={editInputRef}
+            className="td-edit-input"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitEdit();
+              if (e.key === "Escape") cancelEdit();
+            }}
+          />
+        ) : (
+          <div
+            className="td-editable"
+            onClick={() => startEdit(item.id, "device", item.device || "")}
+          >
+            {item.device || <span className="td-editable-empty">click to edit</span>}
+          </div>
+        )}
+      </td>
+
+      {/* Date Tested */}
+      <td className="td-cell-date">{formatDate(item.date_tested)}</td>
+
+      {/* Notes — editable */}
+      <td>
+        {isEditing("notes") ? (
+          <input
+            ref={editInputRef}
+            className="td-edit-input"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitEdit();
+              if (e.key === "Escape") cancelEdit();
+            }}
+          />
+        ) : (
+          <div
+            className="td-editable"
+            onClick={() => startEdit(item.id, "notes", item.notes || "")}
+          >
+            {item.notes || <span className="td-editable-empty">click to edit</span>}
+          </div>
+        )}
+      </td>
+    </tr>
   );
 }
