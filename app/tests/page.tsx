@@ -55,8 +55,8 @@ const PRIORITY_COLORS: Record<string, { dark: string; light: string }> = {
   low: { dark: "#6e7681", light: "#8b949e" },
 };
 
-const TESTERS = ["", "Benjamin Wierzbanowski"];
-const DEVICES = ["", "Ben's iPhone 16 Pro Max"];
+const TESTERS = ["", "Benjamin Wierzbanowski", "XCUITest"];
+const DEVICES = ["", "Ben's iPhone 16 Pro Max", "Simulator"];
 
 // ── Component ────────────────────────────────────────────────────────────────
 
