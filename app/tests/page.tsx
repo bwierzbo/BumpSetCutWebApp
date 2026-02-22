@@ -980,19 +980,19 @@ export default function TestDashboard() {
         @media (max-width: 900px) {
           .td { padding: 16px 12px; }
           .td-toolbar { flex-direction: column; }
+
+          /* Hide tester, device, date, notes columns */
           .th-tester, .th-device, .th-date, .th-notes { display: none; }
-          .td-table td:nth-child(5),
-          .td-table td:nth-child(6),
-          .td-table td:nth-child(7),
-          .td-table td:nth-child(8) { display: none; }
-          .td-section-row td:nth-child(5),
-          .td-section-row td:nth-child(6),
-          .td-section-row td:nth-child(7),
-          .td-section-row td:nth-child(8),
-          .td-subsection-row td:nth-child(5),
-          .td-subsection-row td:nth-child(6),
-          .td-subsection-row td:nth-child(7),
-          .td-subsection-row td:nth-child(8) { display: table-cell; }
+          .td-test-row td:nth-child(5),
+          .td-test-row td:nth-child(6),
+          .td-test-row td:nth-child(7),
+          .td-test-row td:nth-child(8) { display: none; }
+
+          /* Switch to auto layout so remaining columns size to content */
+          .td-table { table-layout: auto; }
+          .th-id { width: auto; }
+          .th-pri { width: auto; }
+          .th-status { width: auto; }
           .td-summary-stats { gap: 14px; }
         }
 
@@ -1021,6 +1021,10 @@ export default function TestDashboard() {
             white-space: nowrap;
             flex-shrink: 0;
           }
+          .td-table-wrap { overflow-x: hidden; }
+          .td-cell-id { font-size: 10px; }
+          .td-cell-desc { font-size: 11px; }
+          .td-status-select { min-width: 65px; font-size: 10px; padding: 3px 16px 3px 6px; }
         }
 
         /* ── Responsive: Phone (≤640px) ────────────────────────────── */
@@ -1035,7 +1039,7 @@ export default function TestDashboard() {
           .td-header h1 { font-size: 16px; }
           .td-theme-toggle { align-self: flex-start; }
 
-          /* Summary stats: 3-col grid then 2-col for overflow */
+          /* Summary stats: 3-col grid */
           .td-summary { padding: 10px 12px; }
           .td-summary-stats {
             grid-template-columns: repeat(3, 1fr);
@@ -1057,8 +1061,12 @@ export default function TestDashboard() {
           }
 
           /* Table → card layout */
-          .td-table { table-layout: auto; }
           .td-table thead { display: none; }
+          .td-table-wrap {
+            overflow: visible;
+            border: none;
+            border-radius: 0;
+          }
 
           .td-section-row td,
           .td-subsection-row td {
@@ -1078,7 +1086,7 @@ export default function TestDashboard() {
             border-bottom: none;
             padding: 0;
           }
-          /* Show: ID, description, priority, status */
+          /* Show: ID, priority, description, status */
           .td-test-row td:nth-child(1),
           .td-test-row td:nth-child(2),
           .td-test-row td:nth-child(3),
@@ -1086,20 +1094,16 @@ export default function TestDashboard() {
             display: inline-block;
             vertical-align: middle;
           }
-          /* ID cell */
           .td-test-row td:nth-child(1) {
             font-size: 10px;
             margin-right: 6px;
           }
-          /* Priority cell */
           .td-test-row td:nth-child(2) {
             margin-right: 6px;
           }
-          /* Status cell */
           .td-test-row td:nth-child(4) {
             float: right;
           }
-          /* Description cell: full width on next line */
           .td-test-row td:nth-child(3) {
             display: block;
             margin-top: 4px;
@@ -1111,16 +1115,18 @@ export default function TestDashboard() {
           .td-test-row:nth-child(even) { background: var(--even-bg); }
           .td-test-row:hover { background: var(--hover-bg); }
 
-          /* Bigger touch targets for status dropdown */
+          /* Bigger touch targets */
           .td-status-select {
             min-height: 36px;
             font-size: 12px;
             padding: 4px 22px 4px 10px;
+            min-width: 75px;
           }
 
-          /* Section badges: simpler on mobile */
+          /* Section badges: compact on mobile */
           .td-section-badges { gap: 4px; }
           .td-mini-progress { width: 36px; }
+          .td-section-name { gap: 6px; flex-wrap: wrap; }
 
           /* Toast: centered at bottom */
           .td-toast {
@@ -1132,13 +1138,6 @@ export default function TestDashboard() {
           @keyframes td-toast-in {
             from { opacity: 0; transform: translateX(50%) translateY(8px); }
             to { opacity: 1; transform: translateX(50%) translateY(0); }
-          }
-
-          /* Table wrapper: no horizontal scroll */
-          .td-table-wrap {
-            overflow: visible;
-            border: none;
-            border-radius: 0;
           }
         }
       `}</style>
