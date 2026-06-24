@@ -40,7 +40,7 @@ export default function Testimonials() {
               viewport={{ once: true, margin: "-50px" }}
               className="relative bg-white rounded-2xl p-8 shadow-sm"
             >
-              <Quote className="w-8 h-8 text-[#FF6B35]/20 mb-4" />
+              <Quote className="w-8 h-8 text-warm/20 mb-4" />
 
               <p className="text-[#1A2332] italic leading-relaxed mb-6">
                 &ldquo;{testimonial.quote}&rdquo;
@@ -50,7 +50,7 @@ export default function Testimonials() {
                 {Array.from({ length: testimonial.rating }).map((_, idx) => (
                   <Star
                     key={idx}
-                    className="w-4 h-4 fill-[#FF6B35] text-[#FF6B35]"
+                    className="w-4 h-4 fill-warm text-warm"
                   />
                 ))}
               </div>

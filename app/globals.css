@@ -1,13 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --color-primary: #FF6B35;
-  --color-primary-dark: #E55A2B;
-  --color-primary-light: #FF8A5C;
+  /* Primary brand — Blue (matches app icon + ColorTokens.swift) */
+  --color-primary: #3B82F6;
+  --color-primary-dark: #2563EB;
+  --color-primary-light: #60A5FA;
+  /* Dark navy for hero/CTA/footer sections */
   --color-secondary: #1A2332;
   --color-secondary-light: #243044;
-  --color-accent: #00C896;
-  --color-accent-dark: #00A87D;
+  /* Accent — Teal */
+  --color-accent: #14B8A6;
+  --color-accent-dark: #0D9488;
+  /* Warm accent — Orange, badge/highlight use only (demoted per app design system) */
+  --color-warm: #FF6B35;
+  --color-warm-dark: #E55A28;
   --color-background: #F8F9FA;
   --color-background-white: #FFFFFF;
   --color-foreground: #1A2332;
@@ -23,6 +29,8 @@
   --color-secondary-light: var(--color-secondary-light);
   --color-accent: var(--color-accent);
   --color-accent-dark: var(--color-accent-dark);
+  --color-warm: var(--color-warm);
+  --color-warm-dark: var(--color-warm-dark);
   --color-background: var(--color-background);
   --color-background-white: var(--color-background-white);
   --color-foreground: var(--color-foreground);

@@ -36,12 +36,12 @@ function PlanCard({
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
       className={`relative rounded-2xl bg-white p-8 flex flex-col ${
         isHighlighted
-          ? "shadow-xl scale-[1.02] border-t-4 border-t-[#FF6B35] ring-1 ring-[#FF6B35]/10"
+          ? "shadow-xl scale-[1.02] border-t-4 border-t-primary ring-1 ring-primary/10"
           : "shadow-md border border-[#E5E7EB]"
       }`}
     >
       {isHighlighted && (
-        <span className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#FF6B35] text-white text-xs font-semibold px-4 py-1 rounded-full">
+        <span className="absolute -top-4 left-1/2 -translate-x-1/2 bg-primary text-white text-xs font-semibold px-4 py-1 rounded-full">
           Most Popular
         </span>
       )}
@@ -61,7 +61,7 @@ function PlanCard({
       <ul className="flex-1 space-y-3 mb-8">
         {plan.features.map((feature, i) => (
           <li key={feature} className="flex items-start gap-3">
-            <Check className="w-5 h-5 text-[#00C896] shrink-0 mt-0.5" />
+            <Check className="w-5 h-5 text-accent shrink-0 mt-0.5" />
             <span
               className={`text-sm text-[#1A2332] ${
                 isHighlighted && i < 4 ? "font-bold" : ""
@@ -77,6 +77,7 @@ function PlanCard({
         variant={isHighlighted ? "primary" : "outline"}
         size="lg"
         href={siteConfig.appStoreUrl}
+        comingSoon={siteConfig.appStoreComingSoon}
         className="w-full"
       >
         {plan.cta}

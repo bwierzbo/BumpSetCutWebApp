@@ -63,7 +63,12 @@ export default function Header() {
 
           {/* Desktop CTA */}
           <div className="hidden md:block">
-            <Button variant="primary" size="sm" href={siteConfig.appStoreUrl}>
+            <Button
+              variant="primary"
+              size="sm"
+              href={siteConfig.appStoreUrl}
+              comingSoon={siteConfig.appStoreComingSoon}
+            >
               Download
             </Button>
           </div>
@@ -108,6 +113,7 @@ export default function Header() {
                 variant="primary"
                 size="md"
                 href={siteConfig.appStoreUrl}
+                comingSoon={siteConfig.appStoreComingSoon}
                 onClick={handleLinkClick}
               >
                 Download

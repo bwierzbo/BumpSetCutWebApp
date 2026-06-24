@@ -10,7 +10,7 @@ export default function CTA() {
   return (
     <Section className="bg-[#1A2332] relative overflow-hidden">
       {/* Subtle gradient accent */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#FF6B35]/10 via-transparent to-[#00C896]/10 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-accent/10 pointer-events-none" />
 
       <Container className="relative z-10">
         <div className="text-center max-w-2xl mx-auto">
@@ -42,7 +42,12 @@ export default function CTA() {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="flex flex-col sm:flex-row gap-4 justify-center"
           >
-            <Button variant="primary" size="lg" href={siteConfig.appStoreUrl}>
+            <Button
+              variant="primary"
+              size="lg"
+              href={siteConfig.appStoreUrl}
+              comingSoon={siteConfig.appStoreComingSoon}
+            >
               Download on iOS
             </Button>
             <Button

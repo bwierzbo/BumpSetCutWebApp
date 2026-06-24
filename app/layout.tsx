@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { siteConfig } from "@/lib/content";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -8,6 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteConfig.url),
   title: "BumpSetCut - AI-Powered Volleyball Rally Detection",
   description:
     "Automatically detect, extract, and share volleyball rallies from your videos. BumpSetCut uses AI to find the action so you can focus on the game.",

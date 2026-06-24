@@ -16,15 +16,16 @@ interface ButtonProps {
   rel?: string;
   type?: "button" | "submit" | "reset";
   disabled?: boolean;
+  comingSoon?: boolean;
   onClick?: () => void;
 }
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    "bg-[#FF6B35] text-white hover:bg-[#E55A2B] shadow-lg shadow-[#FF6B35]/25",
-  secondary: "bg-[#1A2332] text-white hover:bg-[#243044]",
+    "bg-primary text-white hover:bg-primary-dark shadow-lg shadow-primary/25",
+  secondary: "bg-secondary text-white hover:bg-secondary-light",
   outline:
-    "border-2 border-[#FF6B35] text-[#FF6B35] hover:bg-[#FF6B35] hover:text-white",
+    "border-2 border-primary text-primary hover:bg-primary hover:text-white",
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -43,15 +44,26 @@ export default function Button({
   rel,
   type = "button",
   disabled,
+  comingSoon,
   onClick,
 }: ButtonProps) {
+  const isDisabled = disabled || comingSoon;
   const classes = cn(
     "inline-flex items-center justify-center rounded-xl font-semibold transition-colors duration-200 cursor-pointer",
     variantStyles[variant],
     sizeStyles[size],
-    disabled && "opacity-50 cursor-not-allowed",
+    isDisabled && "opacity-60 cursor-not-allowed",
     className
   );
+
+  // Coming-soon: render a non-interactive button showing "Coming Soon" (no dead link).
+  if (comingSoon) {
+    return (
+      <span className={classes} aria-disabled="true">
+        Coming Soon
+      </span>
+    );
+  }
 
   if (href) {
     return (

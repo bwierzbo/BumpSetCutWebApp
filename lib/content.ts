@@ -4,7 +4,9 @@ export const siteConfig = {
   description:
     "Automatically detect, extract, and share volleyball rallies from your videos. BumpSetCut uses AI to find the action so you can focus on the game.",
   url: "https://bumpsetcut.com",
-  appStoreUrl: "#",
+  // TODO: set the real App Store URL and flip appStoreComingSoon to false when live.
+  appStoreUrl: "",
+  appStoreComingSoon: true,
   emails: {
     general: "hello@bumpsetcut.com",
     support: "support@bumpsetcut.com",
@@ -215,7 +217,7 @@ export const faqItems = [
   {
     question: "What devices are supported?",
     answer:
-      "BumpSetCut requires iOS 17.0 or later. It works on iPhone 12 and newer models. iPad support coming soon.",
+      "BumpSetCut requires iOS 26 or later and runs on recent iPhone models. iPad support coming soon.",
     category: "Technical",
   },
   {
@@ -227,7 +229,7 @@ export const faqItems = [
   {
     question: "How long does processing take?",
     answer:
-      "Processing time depends on video length and device. Typically, a 30-minute video processes in 5-10 minutes on an iPhone 14 or newer. Pro users get priority processing.",
+      "Processing time depends on video length and device. Typically, a 30-minute video processes in 5-10 minutes on an iPhone 15 or newer. Pro users get priority processing.",
     category: "Technical",
   },
   {
@@ -316,7 +318,7 @@ export const footerLinks = {
     { label: "Features", href: "#features" },
     { label: "Pricing", href: "#pricing" },
     { label: "How It Works", href: "#how-it-works" },
-    { label: "Download", href: "#" },
+    { label: "Download", href: "#pricing" },
   ],
   resources: [
     { label: "FAQ", href: "/faq" },

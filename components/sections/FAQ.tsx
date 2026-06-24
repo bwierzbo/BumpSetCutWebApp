@@ -81,7 +81,7 @@ export default function FAQ() {
         <div className="text-center mt-8">
           <Link
             href="/faq"
-            className="text-[#FF6B35] font-semibold hover:underline"
+            className="text-primary font-semibold hover:underline"
           >
             View all FAQs &rarr;
           </Link>
