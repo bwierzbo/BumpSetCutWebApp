@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { DeleteButton } from "./DeleteButton";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -60,6 +61,7 @@ export default async function FlywheelDashboard() {
             <th style={th}>Flags</th>
             <th style={th}>Reasons</th>
             <th style={th}></th>
+            <th style={th}></th>
           </tr>
         </thead>
         <tbody>
@@ -96,6 +98,9 @@ export default async function FlywheelDashboard() {
                   ) : (
                     <span style={{ color: "#666" }}>no frames</span>
                   )}
+                </td>
+                <td style={cell}>
+                  <DeleteButton id={r.id} />
                 </td>
               </tr>
             );
