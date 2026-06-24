@@ -20,17 +20,7 @@ export function DeleteButton({ id }: { id: string }) {
       <input type="hidden" name="id" value={id} />
       <button
         type="submit"
-        style={{
-          background: "transparent",
-          color: "#f87171",
-          border: "1px solid #f87171",
-          padding: "6px 12px",
-          borderRadius: 6,
-          fontWeight: 600,
-          fontSize: 13,
-          cursor: "pointer",
-          whiteSpace: "nowrap",
-        }}
+        className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50"
       >
         Delete
       </button>
