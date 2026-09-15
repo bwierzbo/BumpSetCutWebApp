@@ -131,7 +131,21 @@ export default function Footer() {
 
         {/* Bottom bar */}
         <div className="border-t border-white/10 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-white/40">
-          <p>&copy; 2024 {siteConfig.name}. All rights reserved.</p>
+          <p>
+            &copy; {new Date().getFullYear()} W12 Systems LLC. All rights reserved.{" "}
+            <span className="block sm:inline">
+              {siteConfig.name} is a product of{" "}
+              <a
+                href="https://w12systems.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-white/70 transition-colors underline underline-offset-2"
+              >
+                W12 Systems LLC
+              </a>
+              .
+            </span>
+          </p>
           <div className="flex gap-6">
             <Link href="/privacy" className="hover:text-white/70 transition-colors">
               Privacy Policy
