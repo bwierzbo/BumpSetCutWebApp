@@ -19,7 +19,7 @@ export default function CommunityGuidelinesPage() {
               Community Guidelines
             </h1>
             <p className="text-sm text-foreground-muted mb-8">
-              Last Updated: February 11, 2025
+              Last Updated: October 4, 2026
             </p>
             <p className="text-foreground-muted leading-relaxed mb-8">
               BumpSetCut is a community built around the love of volleyball. Our
@@ -144,6 +144,12 @@ export default function CommunityGuidelinesPage() {
             <h2 className="text-2xl font-bold text-secondary mt-10 mb-4">
               Reporting System
             </h2>
+            <p className="text-foreground-muted leading-relaxed mb-4">
+              <strong>We have zero tolerance for objectionable content and
+              abusive users.</strong> Content that breaks these rules is
+              removed, and users who post it or abuse others are removed from
+              BumpSetCut. We review reports within 24 hours.
+            </p>
             <p className="text-foreground-muted leading-relaxed mb-4">
               If you see content or behavior that violates these guidelines,
               please report it. Your reports help us keep the community safe.

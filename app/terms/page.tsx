@@ -19,7 +19,7 @@ export default function TermsPage() {
               Terms of Service
             </h1>
             <p className="text-sm text-foreground-muted mb-8">
-              Last Updated: February 18, 2026
+              Last Updated: October 4, 2026
             </p>
             <p className="text-foreground-muted leading-relaxed mb-8">
               Please read these Terms of Service (&quot;Terms&quot;) carefully
@@ -374,6 +374,12 @@ export default function TermsPage() {
             <h3 className="text-xl font-semibold text-secondary mt-6 mb-3">
               7.1 Reporting System
             </h3>
+            <p className="text-foreground-muted leading-relaxed mb-4">
+              <strong>We have zero tolerance for objectionable content and
+              abusive users.</strong> Content that breaks these rules is
+              removed, and users who post it or abuse others are removed from
+              BumpSetCut. We review reports within 24 hours.
+            </p>
             <p className="text-foreground-muted leading-relaxed mb-4">
               You can report content that violates our Terms or Community
               Guidelines:

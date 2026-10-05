@@ -19,7 +19,7 @@ export default function PrivacyPage() {
               Privacy Policy
             </h1>
             <p className="text-sm text-foreground-muted mb-8">
-              Last Updated: February 18, 2026
+              Last Updated: October 4, 2026
             </p>
             <p className="text-foreground-muted leading-relaxed mb-6">
               BumpSetCut (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) is
@@ -48,7 +48,8 @@ export default function PrivacyPage() {
             <ul className="list-disc pl-6 space-y-2 text-foreground-muted mb-6">
               <li>
                 <strong>Account Information:</strong> Email address, username,
-                display name, and profile picture (via Apple Sign-In)
+                display name, and profile picture (via Sign in with Apple,
+                Google sign-in, or email)
               </li>
               <li>
                 <strong>User-Generated Content:</strong> Videos you upload,
@@ -60,8 +61,20 @@ export default function PrivacyPage() {
                 customization, and preferences
               </li>
               <li>
-                <strong>Communication Data:</strong> Messages sent through the
-                app, support requests, and feedback
+                <strong>Communication Data:</strong> Direct messages you send to
+                other users, support requests, and feedback
+              </li>
+              <li>
+                <strong>Location:</strong> A place you choose to tag on a
+                highlight you post (optional). We don&apos;t track your
+                device&apos;s location.
+              </li>
+              <li>
+                <strong>Training Contributions (opt-in):</strong> If you turn on
+                data contribution, frames from rallies the detector struggled
+                with, along with what the app detected, are sent to us to
+                improve the detector. Off unless you turn it on; you can turn it
+                off at any time, and contributions are deleted with your account.
               </li>
             </ul>
 
@@ -99,6 +112,10 @@ export default function PrivacyPage() {
                 <strong>Apple Sign-In:</strong> We receive your Apple ID
                 authentication token, email (if you choose to share it), and
                 name from Apple
+              </li>
+              <li>
+                <strong>Google Sign-In:</strong> If you sign in with Google, we
+                receive your Google account email, name, and profile picture
               </li>
               <li>
                 <strong>Supabase Backend:</strong> Our backend service provider
@@ -140,7 +157,10 @@ export default function PrivacyPage() {
               2.2 Account Management
             </h3>
             <ul className="list-disc pl-6 space-y-2 text-foreground-muted mb-6">
-              <li>Create and manage your account via Apple Sign-In</li>
+              <li>
+                Create and manage your account via Sign in with Apple, Google
+                sign-in, or email
+              </li>
               <li>
                 Authenticate your identity and prevent unauthorized access
               </li>
@@ -227,6 +247,10 @@ export default function PrivacyPage() {
               <li>
                 <strong>Apple (Authentication):</strong> Handles Sign in with
                 Apple authentication
+              </li>
+              <li>
+                <strong>Google (Authentication):</strong> Handles Google
+                sign-in
               </li>
               <li>
                 <strong>Cloud Storage:</strong> Stores video files and rally
@@ -492,7 +516,15 @@ export default function PrivacyPage() {
             </p>
 
             <h3 className="text-xl font-semibold text-secondary mt-6 mb-3">
-              11.2 Supabase
+              11.2 Google Sign-In
+            </h3>
+            <p className="text-foreground-muted leading-relaxed mb-6">
+              We offer Google sign-in for authentication. Google&apos;s privacy
+              policy applies to their services.
+            </p>
+
+            <h3 className="text-xl font-semibold text-secondary mt-6 mb-3">
+              11.3 Supabase
             </h3>
             <p className="text-foreground-muted leading-relaxed mb-6">
               We use Supabase for backend infrastructure. Supabase&apos;s
