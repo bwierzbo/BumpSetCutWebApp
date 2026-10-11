@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
+import { contributionFiles } from "@/lib/flywheel";
 
 export const runtime = "nodejs";
 
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
   const rec = body.record;
   if (!rec) return NextResponse.json({ error: "no record" }, { status: 400 });
 
-  const frameCount = Array.isArray(rec.frame_urls) ? rec.frame_urls.length : 0;
+  const fileCount = contributionFiles(rec).length;
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://bumpsetcut.com";
 
   const fromEmail = process.env.FLYWHEEL_FROM_EMAIL ?? "onboarding@resend.dev";
@@ -30,12 +31,12 @@ export async function POST(req: NextRequest) {
   const { error } = await resend.emails.send({
     from: `BumpSetCut Flywheel <${fromEmail}>`,
     to: "admin@bumpsetcut.com",
-    subject: `New training contribution — ${frameCount} frames`,
+    subject: `New training contribution — ${fileCount} files`,
     html: `
       <h2>New flywheel contribution</h2>
       <ul>
         <li><b>Video:</b> ${rec.local_video_id ?? "?"}</li>
-        <li><b>Frames:</b> ${frameCount}</li>
+        <li><b>Frames / clips:</b> ${fileCount}</li>
         <li><b>First flag:</b> rally ${rec.rally_index ?? "?"} — ${rec.trigger_type ?? "?"}${
           rec.user_reason ? ` (${rec.user_reason})` : ""
         }</li>

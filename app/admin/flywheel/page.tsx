@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { logout } from "../auth";
 import { DeleteButton } from "./DeleteButton";
+import { contributionFiles } from "@/lib/flywheel";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -19,6 +20,7 @@ interface Contribution {
   trigger_type: string;
   user_reason: string | null;
   frame_urls: string[] | null;
+  clip_urls: string[] | null;
   flag_count: number;
   flag_events: FlagEvent[] | null;
   created_at: string;
@@ -32,16 +34,13 @@ export default async function FlywheelDashboard() {
   const { data } = await supabaseAdmin
     .from("flywheel_contributions")
     .select(
-      "id, user_id, local_video_id, trigger_type, user_reason, frame_urls, flag_count, flag_events, created_at"
+      "id, user_id, local_video_id, trigger_type, user_reason, frame_urls, clip_urls, flag_count, flag_events, created_at"
     )
     .order("created_at", { ascending: false })
     .limit(200);
 
   const rows = (data ?? []) as Contribution[];
-  const totalFrames = rows.reduce(
-    (n, r) => n + (Array.isArray(r.frame_urls) ? r.frame_urls.length : 0),
-    0
-  );
+  const totalFiles = rows.reduce((n, r) => n + contributionFiles(r).length, 0);
 
   return (
     <main className="min-h-screen bg-background">
@@ -53,7 +52,7 @@ export default async function FlywheelDashboard() {
               Flywheel Contributions
             </h1>
             <p className="mt-1 text-sm text-foreground-muted">
-              {rows.length} contribution{rows.length === 1 ? "" : "s"} · {totalFrames} frames —
+              {rows.length} contribution{rows.length === 1 ? "" : "s"} · {totalFiles} files —
               download, drag into a Roboflow batch, then delete.
             </p>
           </div>
@@ -81,7 +80,7 @@ export default async function FlywheelDashboard() {
                 <tr className="border-b border-border bg-background/60 text-left text-xs uppercase tracking-wide text-foreground-muted">
                   <th className="px-5 py-3 font-semibold">When</th>
                   <th className="px-5 py-3 font-semibold">Video</th>
-                  <th className="px-5 py-3 font-semibold">Frames</th>
+                  <th className="px-5 py-3 font-semibold">Files</th>
                   <th className="px-5 py-3 font-semibold">Flags</th>
                   <th className="px-5 py-3 font-semibold">Reasons</th>
                   <th className="px-5 py-3" />
@@ -89,7 +88,7 @@ export default async function FlywheelDashboard() {
               </thead>
               <tbody className="divide-y divide-border">
                 {rows.map((r) => {
-                  const frames = Array.isArray(r.frame_urls) ? r.frame_urls.length : 0;
+                  const frames = contributionFiles(r).length;
                   const events = r.flag_events ?? [];
                   return (
                     <tr key={r.id} className="align-top transition hover:bg-background/40">
@@ -133,7 +132,7 @@ export default async function FlywheelDashboard() {
                               Download
                             </a>
                           ) : (
-                            <span className="text-xs text-foreground-muted">no frames</span>
+                            <span className="text-xs text-foreground-muted">no files</span>
                           )}
                           <DeleteButton id={r.id} />
                         </div>
